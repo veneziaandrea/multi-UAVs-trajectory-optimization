@@ -1,4 +1,4 @@
-# multi-UAVs-trajectory-optimization
+# multi-UAV MPC based trajectory optimization
 MPC based optimal control of a flying drones fleet for obstacle avoidance/surface monitoring 
 
 --- 
