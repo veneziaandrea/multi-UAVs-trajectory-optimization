@@ -4,7 +4,7 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 --- 
 
 ## Structure
-
+```
 multi-UAVs-trajectory-optimization/
 │
 ├── main.m                              % main script to run the simulation
@@ -20,13 +20,14 @@ multi-UAVs-trajectory-optimization/
 │
 ├── .gitignore
 └── README.md
-
+```
 --- 
 
 ## How to Use
 1. Clone the repository:
    ```bash
-   git clone
+   git clone https://github.com/veneziaandrea/multi-UAVs-trajectory-optimization.git
+2. Run main.m
 
 --- 
 
