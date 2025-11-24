@@ -8,10 +8,11 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 multi-UAVs-trajectory-optimization/
 │
 ├── main.m                              % main script to run the simulation
-├── sim_params.m                         % simulation parameters (Ts, limits, horizon, etc.)
-├── drone_model.m                      % discrete-time 3D drone model
+├── sim_params.m                        % simulation parameters (Ts, limits, horizon, etc.)
+├── drone_model.m                       % discrete-time 3D drone model
 │
 ├── utils/                              % helper functions (plotting, obstacle generation)
+│   └── generateDroneMap.m              % function to generate a 3D map with obstacles
 ├── mpc/                                % MPC scripts and functions
 ├── results/                            % saved logs and figures
 ├── data/                               % static data (waypoints, obstacles, maps)
