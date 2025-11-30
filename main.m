@@ -25,37 +25,26 @@ save('generated_drone_map.mat', 'map');
 % loadedMap = load('generated_drone_map.mat');
 % disp('Map loaded successfully. Displaying the map again for verification.');
 
-%% OPTIMIZATION PARAMETERS (WAYPOINT GENERATION)
+%% OPTIMIZATION PARAMETERS (WAYPOINT GENERATION + MAX DISTANCE)
 % in this stage a Dynamic Window Approach is needed, since the waypoints
 % are still unknown and the trajectory optimizer can't be (still) used.
 % To run the drone model, which needs as input vector the accelerations,
 % somehow we need to generate these, and the DWA approach to simulate a
 % possible state evolution in this FHOCP seemed the most sensible choice.
-% Then, once all the drones generated their chosen waypoint the
-% optimization is repeated for the next one, and the next, ecc... until the
-% conditions imposed by the cost function reach a plateau. 
-% Only afterwards, an optimization problem to refine the obtained
-% trajectory is solved for each drone, to ensure the lowest amount of
-% energy and time spent while following the computed trajectory
+% Then, once all the drones generated their chosen waypoint these are
+% evaluated in another cost function, which aims to maximize the mean distance
+% between drones 
 
 maxIterations = 100; % maximum number of iterations for the optimization process
 tolerance = 1e-3; % convergence tolerance for the optimization
 
-r_FOV= 4; % range of vision/reliable sensing of a single drone, 360 degrees [m]
+r_FOV= 4; % range of vision of a single drone, 360 degrees [m]
 safeDist= 0.6; % inflation of the drone size to ensure that no collisions occure between drones and obstacles [m]
 N= 50; % horizon of the FHOCP
 Ts= 1e-2; % sampling time
 n= 6; % system's order (drone model)
 
-% Physical constraints of the drone
+Z_i= zeros(n, N); % state vector of one drone
 a_max= 3; % upper bound for the acceleration [m/s^2]
 a_min= -3; % lower bound for the acceleration [m/s^2]
-v_max= 20; % [m/s]
-v_min= 0; % [m/s]
-
-% Initialize the state vectors for all drones and else needed for the
-% optimization
-Z = zeros(n, N, numDrones); % state vectors for all drones
-bounds= [v_max*eye(3), v_min*eye(3), a_max*eye(3), a_min*eye(3)]; 
-seen_points= zeros(numDrones, 2*pi);
 
