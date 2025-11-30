@@ -12,6 +12,7 @@ multi-UAVs-trajectory-optimization/
 ├── drone_model.m                       % discrete-time 3D drone model
 │
 ├── utils/                              % helper functions (plotting, obstacle generation)
+│   ├── DWA.m                           % Dynamic Window Approach function
 │   └── generateDroneMap.m              % function to generate a 3D map with obstacles
 ├── mpc/                                % MPC scripts and functions
 ├── results/                            % saved logs and figures
