@@ -13,6 +13,7 @@ multi-UAVs-trajectory-optimization/
 │
 ├── utils/                              % helper functions (plotting, obstacle generation)
 │   ├── DWA.m                           % Dynamic Window Approach function
+│   ├── FindIntesections.m              % function to minimize drones collision
 │   └── generateDroneMap.m              % function to generate a 3D map with obstacles
 ├── mpc/                                % MPC scripts and functions
 │   ├── pred_mats.m                     % function to generate prediction matrices for QP
