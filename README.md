@@ -3,6 +3,14 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 
 --- 
 
+## Authors
+
+- Andrea Venezia - [GitHub](https://github.com/veneziaandrea)  
+- Francesco Street - [GitHub](https://github.com/francescostreet)  
+- Francesco Urbano Sereno - [GitHub](https://github.com/FrancescoSereno)
+
+---
+
 ## Structure
 ```
 multi-UAVs-trajectory-optimization/
