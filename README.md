@@ -15,6 +15,9 @@ multi-UAVs-trajectory-optimization/
 │   ├── DWA.m                           % Dynamic Window Approach function
 │   └── generateDroneMap.m              % function to generate a 3D map with obstacles
 ├── mpc/                                % MPC scripts and functions
+│   ├── pred_mats.m                     % function to generate prediction matrices for QP
+│   ├── QP_mats.m                       % function to generate QP problem
+│   └── MPC.m                           % MPC 
 ├── results/                            % saved logs and figures
 ├── data/                               % static data (waypoints, obstacles, maps)
 ├── docs/                               % documentation and diagrams
