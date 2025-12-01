@@ -1,7 +1,20 @@
 % MAIN SCRIPT FOR THE PROJECT
 
+clc
+clear all
+
 % Import path of other folders
-currentDir= fullfile()
+currentDir= fullfile('main.m');
+utilsPath = fullfile('utils');
+resultsPath = fullfile('results');
+mpcPath = fullfile('mpc');
+docsPath = fullfile('docs');
+dataPath = fullfile('data');
+addpath(utilsPath);
+addpath(resultsPath);
+addpath(mpcPath);
+addpath(docsPath);
+addpath(dataPath);
 %% MAP CREATION
 % define the map parameters
 l= 50; % length of one side of the map [m]
@@ -12,14 +25,7 @@ numDrones= 5; % number of drones
 manualDPos= []; % if is desired to manually place drones inside the map; starting position [x y z] for each drone
 
 % create the map 
-map = generateDroneMap(l, density, maxH, numObs, numDrones, manualDPos);
-% Display the generated map
-figure;
-mesh(map);
-xlabel('X-axis');
-ylabel('Y-axis');
-zlabel('Height');
-title('Drone Map Visualization');
+map = generateDroneMap(l, density, maxH, numObs, numDrones, manualDPos); % will also plot it
 
 %% Save the generated map to a .mat file for future use (optional)
 save('generated_drone_map.mat', 'map');
@@ -42,11 +48,15 @@ tolerance = 1e-3; % convergence tolerance for the optimization
 
 r_FOV= 4; % range of vision of a single drone, 360 degrees [m]
 safeDist= 0.6; % inflation of the drone size to ensure that no collisions occure between drones and obstacles [m]
-N= 50; % horizon of the FHOCP
+N= 20; % horizon of the FHOCP
 Ts= 1e-2; % sampling time
 n= 6; % system's order (drone model)
 
 Z_i= zeros(n, N); % state vector of one drone
 a_max= 3; % upper bound for the acceleration [m/s^2]
 a_min= -3; % lower bound for the acceleration [m/s^2]
+v_max= 15; % [m/s]
+v_min= 0;  % [m/s]
+bounds= [v_max, v_min, a_max, a_min];
 
+seen_points= [];
