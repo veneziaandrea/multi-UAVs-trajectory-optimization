@@ -1,4 +1,4 @@
-function [z] = drone_model(dt, u)
+function [z_next, A, B] = drone_model(dt, u, z)
 % Discrete 3D-model of a single drone. 
 % UAV is modeled as a point-mass flying in a pre-determined 3D space. 
 % The mass of the single drone is assumed to be constant. 
@@ -26,8 +26,13 @@ function [z] = drone_model(dt, u)
 
 %% INITIALIZATION: 
 
-% Initialize state variables
-z           = zeros(6, 1);                                                 % [x_i; y_i; z_i; vx_i; vy_i; vz_i]
+if nargin < 3
+    z = zeros(6,1);
+end
+
+if nargin < 2
+    u = zeros(3,1);
+end
 
 %Initaialize state matrix A and input matix B
 A           = eye(6);
@@ -42,5 +47,5 @@ B(:, 1:3)   = dt * eye(3);                                                 % Ass
 % pos_kplus1 = pos_k + dt * vel_k + 0 * acc_k
 % vel_kplus1 = 0 * pos_k + vel_k + dt * acc_k
 
-z = A * z + B * u;
+z_next = A * z + B * u;
 end
