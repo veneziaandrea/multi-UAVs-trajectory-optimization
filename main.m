@@ -1,5 +1,7 @@
 % MAIN SCRIPT FOR THE PROJECT
 
+% Import path of other folders
+currentDir= fullfile()
 %% MAP CREATION
 % define the map parameters
 l= 50; % length of one side of the map [m]

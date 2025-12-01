@@ -1,4 +1,4 @@
-function [Z, seen_points] = custom_DWA(ind, Z, bounds, r_FOV, numDrones, seen_points) 
+function [Z, seen_points] = DWA(ind, Z, bounds, r_FOV, numDrones, seen_points) 
 % Function in which is implemented the optimization problem for waypoint
 % generation;
 % INPUT: - current state of the drone, upper/lower bounds
