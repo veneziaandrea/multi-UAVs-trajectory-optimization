@@ -3,6 +3,19 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 
 --- 
 
+# Pipeline
+1. Modellization
+2. Map generation
+3. Voronoi Diagrams:
+   3.1 fnc to compute map partitions
+   3.2 fcn to discretize each assigned map partion to generate waypoints - DWA x each zone
+   3.3 fcn to assign drone traj - cost fcn + iteration
+4. MPC
+5. Visualization/Simulation
+
+
+---
+
 ## Authors
 
 - Andrea Venezia - [GitHub](https://github.com/veneziaandrea)  
