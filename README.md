@@ -3,6 +3,29 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 
 --- 
 
+# Pipeline
+MAP GENERATION
+      ↓
+INITIAL DRONE POSITIONS
+      ↓
+VORONOI PARTITION
+      ↓
+LLOYD RELAXATION (init only)
+      ↓
+STATIC CELL ASSIGNMENT
+      ↓
+LOCAL WAYPOINT GENERATION
+      ↓
+LOCAL PATH PLANNING
+      ↓
+DISTRIBUTED MPC
+      ↓
+(PYBULLET SIMULATION)
+      ↓
+FEEDBACK
+
+---
+
 ## Authors
 
 - Andrea Venezia - [GitHub](https://github.com/veneziaandrea)  
