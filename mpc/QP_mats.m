@@ -29,8 +29,7 @@ Rbar = kron(eye(N), R);                                                    % (m*
 
 % Cost matrices H and f (from derivation)
 H = (Gamma' * Qbar * Gamma) + Rbar;
-c = (Gamma' * Qbar * (Lambda * x0 - Xref));                              % linear term (QP expects 1/2 x'Hx + c'x)
-
+c = (Gamma' * Qbar * (Lambda * x0 - Xref));                                % linear term (QP expects 1/2 x'Hx + c'x)
 
 % Define equality constraints
 Aeq = []; 
@@ -62,22 +61,22 @@ for k = 0:N
     Lambda_k = Lambda(k*n+1:(k+1)*n, :);
     Gamma_k  = Gamma(k*n+1:(k+1)*n, :);
 
-    % ---- posizione: pos <= pos_max ----
+    % ---- position: pos <= pos_max ----
     Aineq(row:row+2, :) = C_pos * Gamma_k;
     bineq(row:row+2)    = pos_max - C_pos * (Lambda_k*x0);
     row = row + 3;
 
-    % ---- posizione: pos >= pos_min  ( -pos <= -pos_min ) ----
+    % ---- position: pos >= pos_min  ( -pos <= -pos_min ) ----
     Aineq(row:row+2, :) = -C_pos * Gamma_k;
     bineq(row:row+2)    = -pos_min + C_pos * (Lambda_k*x0);
     row = row + 3;
 
-    % ---- velocità: vel <= v_max ----
+    % ---- speed: vel <= v_max ----
     Aineq(row:row+2, :) = C_vel * Gamma_k;
     bineq(row:row+2)    = v_max - C_vel * (Lambda_k*x0);
     row = row + 3;
 
-    % ---- velocità: vel >= v_min  ( -vel <= -v_min ) ----
+    % ---- speed: vel >= v_min  ( -vel <= -v_min ) ----
     Aineq(row:row+2, :) = -C_vel * Gamma_k;
     bineq(row:row+2)    = -v_min + C_vel * (Lambda_k*x0);
     row = row + 3;
