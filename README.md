@@ -4,13 +4,25 @@ MPC based optimal control of a flying drones fleet for obstacle avoidance/surfac
 --- 
 
 # Pipeline
-1. Modelization
-2. Map generation
-3. Voronoi partition
-4. Waypoint generation
-5. Distributed MPC
-6. Physics-based validation (PyBullet)
-7. Performance analysis
+MAP GENERATION
+      ↓
+INITIAL DRONE POSITIONS
+      ↓
+VORONOI PARTITION
+      ↓
+LLOYD RELAXATION (init only)
+      ↓
+STATIC CELL ASSIGNMENT
+      ↓
+LOCAL WAYPOINT GENERATION
+      ↓
+LOCAL PATH PLANNING
+      ↓
+DISTRIBUTED MPC
+      ↓
+(PYBULLET SIMULATION)
+      ↓
+FEEDBACK
 
 ---
 
