@@ -2,6 +2,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 import random
+import matplotlib.pyplot as plt
 
 def generate_drone_map(size, maxheight, num_obstacles, density, num_drones, manual_drone_position=None):
     """
@@ -107,6 +108,23 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones, manu
 
     return workspace, obstacles, free_space, drone_starts
 
+
+def map_visualization(workspace, obstacles, drone_starts):
+
+
+    fig, ax = plt.subplots(figsize=(8,8))
+    x,y = workspace.exterior.xy
+    ax.plot(x,y, color='black')
+
+    for obs in obstacles:
+        x,y = obs.exterior.xy
+        ax.fill(x,y, color='gray')
+
+    for dx,dy in drone_starts:
+        ax.plot(dx, dy, 'ro')
+
+    ax.set_aspect('equal')
+    plt.show()
 
 
 
