@@ -1,16 +1,20 @@
 import numpy as np
 from scipy.spatial import Voronoi
-from shapely.geometry import Polygon
-from shapely.ops import unary_union
 import matplotlib.pyplot as plt
+import time
 
-def vornoi_finite_polygons(vor, radius=None):
+def voronoi_finite_polygons_2d(vor, radius=None):
     """
-    Reconstruct infinite Voronoi regions in a 2D diagram to finite
-    regions.
+    Reconstruct infinite Voronoi regions in a 2D diagram to finite regions.
 
+    Parameters:
+    - vor: Voronoi object from scipy.spatial
+    - radius: Distance to 'points at infinity'
+
+    Returns:
+    - regions: List of Voronoi regions as lists of vertices
+    - vertices: Array of Voronoi vertices
     """
-    # 2D input check
     if vor.points.shape[1] != 2:
         raise ValueError("Requires 2D input")
 
@@ -21,7 +25,7 @@ def vornoi_finite_polygons(vor, radius=None):
     if radius is None:
         radius = vor.points.ptp().max() * 2
 
-    # Construct a map containing all ridges for a given point
+    # Map containing all ridges for a point
     all_ridges = {}
     for (p1, p2), (v1, v2) in zip(vor.ridge_points, vor.ridge_vertices):
         all_ridges.setdefault(p1, []).append((p2, v1, v2))
@@ -32,11 +36,9 @@ def vornoi_finite_polygons(vor, radius=None):
         vertices = vor.regions[region]
 
         if all(v >= 0 for v in vertices):
-            # Finite region
             new_regions.append(vertices)
             continue
 
-        # Reconstruct a non-finite region
         ridges = all_ridges[p1]
         new_region = [v for v in vertices if v >= 0]
 
@@ -44,64 +46,66 @@ def vornoi_finite_polygons(vor, radius=None):
             if v2 < 0:
                 v1, v2 = v2, v1
             if v1 >= 0:
-                # Finite ridge: already in the region
                 continue
 
-            # Compute the missing endpoint of an infinite ridge
-
-            t = vor.points[p2] - vor.points[p1]  # tangent
+            t = vor.points[p2] - vor.points[p1]
             t /= np.linalg.norm(t)
-            n = np.array([-t[1], t[0]])  # normal
+            n = np.array([-t[1], t[0]])
 
             midpoint = vor.points[[p1, p2]].mean(axis=0)
             direction = np.sign(np.dot(midpoint - center, n)) * n
             far_point = vor.vertices[v2] + direction * radius
-            new_region.append(len(new_vertices))
-            new_vertices.append(far_point.tolist()) 
-        new_regions.append(new_region)  
 
-    return new_regions, np.asarray(new_vertices)
+            new_vertices.append(far_point.tolist())
+            new_region.append(len(new_vertices) - 1)
+
+        new_regions.append(new_region)
+
+    return new_regions, np.array(new_vertices)
 
 
+def clip_to_bbox(polygon, bbox):
+    '''Clip a polygon to a bounding box'''  
+
+    min_x, min_y, max_x, max_y = bbox
+    clipped = []
+    for x, y in polygon:
+        if min_x <= x <= max_x and min_y <= y <= max_y:
+            clipped.append((x, y))
+    return clipped
 
 
-def voronoi_partition(points, free_space):
-    vor = Voronoi(points)
-    regions, vertices = vornoi_finite_polygons(vor)
+def voronoi_partition(drone_starts, size):
+    '''Compute Voronoi partitioning for drone starting positions within the free space'''
+    start = time.time()
+    vor = Voronoi(drone_starts)
+    print("voronoi:", time.time()-start)
 
-    polygons = []
+    start = time.time()
+    regions, vertices = voronoi_finite_polygons_2d(vor)
+    print("finite_polygons:", time.time()-start)
+    bbox = (0, size, 0, size)
+    
+    voronoi_cells = []
     for region in regions:
         polygon = vertices[region]
-
-        poly = Polygon(polygon)
-        if poly.is_valid:
-            polygons.append(poly)
-
-    union_poly = unary_union(polygons)
-    partitioned_space = union_poly.intersection(free_space)
-
-    return partitioned_space
+        clipped_polygon = clip_to_bbox(polygon, bbox)
+        voronoi_cells.append(clipped_polygon)
+    
+    return voronoi_cells
 
 
-def plot_environment(workspace, obstacles, cells, points):
-
-    fig, ax = plt.subplots()
-
-    # Workspace
-    x,y = workspace.exterior.xy
-    ax.plot(x,y)
-
-    # Obstacles
-    for obs in obstacles:
-        x,y = obs.exterior.xy
-        ax.fill(x,y, alpha=0.5)
-
-    # Cells
-    for cell in cells:
-        if not cell.is_empty:
-            x,y = cell.exterior.xy
-            ax.fill(x,y, alpha=0.3)
-
-    ax.scatter(points[:,0], points[:,1], c='red')
-    ax.set_aspect('equal')
+def plot_voronoi(voronoi_cells, drone_starts, size):
+    '''Visualize Voronoi cells and drone starting positions'''
+    plt.figure(figsize=(8, 8))
+    for cell in voronoi_cells:
+        if len(cell) > 2:  # Only plot valid polygons
+            plt.fill(*zip(*cell), alpha=0.4)
+    plt.scatter(drone_starts[:, 0], drone_starts[:, 1], c='red', marker='x')
+    plt.xlim(0, size)
+    plt.ylim(0, size)
+    plt.title("Voronoi Partitioning of Drone Starting Positions")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.grid()
     plt.show()

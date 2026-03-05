@@ -106,11 +106,14 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones, manu
     obstacle_union = unary_union(obstacles)
     free_space = workspace.difference(obstacle_union)
 
+    # Simplify the free_space polygon to improve performance
+    # This reduces vertex count significantly while maintaining good accuracy
+    free_space = free_space.simplify(0.15)
+
     return workspace, obstacles, free_space, drone_starts
 
 
 def map_visualization(workspace, obstacles, drone_starts):
-
 
     fig, ax = plt.subplots(figsize=(8,8))
     x,y = workspace.exterior.xy
