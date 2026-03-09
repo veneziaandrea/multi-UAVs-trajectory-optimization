@@ -7,8 +7,8 @@ import numpy as np
 # 2D map generation parameters
 size = 20
 maxheight = 10
-num_obstacles = 15
-density = 0.1
+num_obstacles = 20
+density = 0.05
 num_drones = 5  
 
 # Generate the map and visualize it
@@ -17,11 +17,11 @@ workspace, obstacles, free_space, drone_starts =  generate_drone_map(size, maxhe
 map_visualization(workspace, obstacles, drone_starts)
 
 # Voronoi partitioning
-voronoi_cells = voronoi_partition(drone_starts, size)
-print("Voronoi partitioning completed.")
+#voronoi_cells = voronoi_partition(drone_starts, size)
+#print("Voronoi partitioning completed.")
 
 # Visualize the Voronoi partitioning
-plot_voronoi(voronoi_cells, drone_starts, size)
+#plot_voronoi(voronoi_cells, drone_starts, size)
 
 
 
