@@ -35,6 +35,13 @@ except:
     print(f"Valori debug: x={opti.debug.value(x)}")
     '''
 
+def drone_model(pos, vel, acc, dt):
+    pos_nxt= pos + vel*dt + 0.5*acc*(dt**2)
+    vel_nxt= vel + acc*dt
+    acc_nxt= acc 
+    res= list.append(pos_nxt, vel_nxt)
+    return res
+
 class Drone:
 
     acc_lim= 0.5 # m/s^2
@@ -62,11 +69,18 @@ class Drone:
         k= 10
         # generate trajectories and save final positions and used control inputs
         pos_list= []
-        u_list= []
-        for i in range(0,k):
-            
-            ...
+        dt= 0.1 # simulation time [s]
+        a_list= np.linspace(-a_lim, a_lim, k)
+        for a_k in a_list:
+            state_k= drone_model(pos, vel, a_k, dt)
+            pos_k= state_k[1]
+            vel_k= state_k[2]
 
+            if vel_k <= v_lim:
+                pos_list.append(pos_k)
+            else:
+                a_list.replace(a_k, NULL)
+        
 
 
 
