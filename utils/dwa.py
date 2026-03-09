@@ -80,6 +80,19 @@ class Drone:
                 pos_list.append(pos_k)
             else:
                 a_list.replace(a_k, NULL)
+
+'''
+Tentative pseudo algo:
+1- run dwa for each drone;
+
+2- remove tentative points that have occupancy grid that would mean it collide or 
+out of assigned region through voronoi stuff; 
+--> otherwise assign tentative points in assigned region and solve this problem directly
+
+3- solve optim problem to keep waypoints that minimize J = -mean(distance between drones)
+
+4- redo step 1 to 3 until the difference in J is less than a threshold or max iteration is reached
+'''
         
 
 
