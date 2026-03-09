@@ -34,6 +34,14 @@ class obstacle:
 # --- MAP GENERATION ---
 
 def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
+    ''' Generate a 2D map with random obstacles and drone starting positions.
+        Returns:
+        - workspace: Shapely Polygon representing the boundaries of the map
+        - obstacles: List of obstacle objects with geometric shapes
+        - free_space: Shapely Polygon representing the free space in the map
+        - drone_starts: List of starting positions for the drones
+        
+        '''
 
     min_radius = 0.5
     max_radius = 1.5
@@ -50,6 +58,7 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
     layer = 1
     offsets = []
 
+    # Spawning drones in a grid pattern around the center, ensuring they are not too close to each other
     while len(offsets) < num_drones:
             candidates = [
                 ( layer*inflation, 0),
@@ -134,7 +143,7 @@ def generate_occupancy_grid(workspace, obstacles, size):
 
 
 # --- VISUALIZATION ---
-def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid):
+def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids):
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))  # Two subplots side by side
 
     # ---------------- Map subplot ----------------
@@ -146,9 +155,14 @@ def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_gri
     for obs in obstacles:
         ox, oy = obs.shape.exterior.xy
         ax_map.fill(ox, oy, color='gray', alpha=0.7)
+        
     # Drone starting positions
     if len(drone_starts) > 0:
         ax_map.scatter(drone_starts[:, 0], drone_starts[:, 1], c='red', marker='x', label='Drone Starts')
+    # Centroids from K-means
+    if len(centroids) > 0:
+        ax_map.scatter(centroids[:, 0], centroids[:, 1], c='blue', marker='o', label='K-means Centroids')
+    
     ax_map.set_title("Drone Map with Obstacles")
     ax_map.set_xlabel("X-axis")
     ax_map.set_ylabel("Y-axis")
