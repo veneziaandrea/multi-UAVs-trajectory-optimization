@@ -183,6 +183,12 @@ def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_gri
     plt.colorbar(ax_grid.images[0], ax=ax_grid, label='Occupied')
 
     plt.tight_layout()
-    plt.show()
+    plt.show(block=False)
+
+    while True:
+        plt.pause(1)
+      
+
+    
 
 

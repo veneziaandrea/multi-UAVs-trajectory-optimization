@@ -43,28 +43,20 @@ if drone_start != 'random':
 else:
     centroids = drone_starts
 
-
-vor = Voronoi(centroids)
-fig = voronoi_plot_2d(vor, show_vertices=False,
-line_colors='orange',
-line_width=2,
-line_alpha=0.6,
-point_size=5)
-
-plt.title("Voronoi Diagram (2D)")
-plt.xlabel("X-axis")
-plt.ylabel("Y-axis")
-plt.show()
-
 # Map visualization
+
 # map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
 
 # Voronoi partitioning
-# voronoi_cells = voronoi_partition(centroids, size)
-# print("Voronoi partitioning completed.")
+vor= voronoi_partition(centroids)
+print("Voronoi partitioning completed.")
 
 # Visualize the Voronoi partitioning
-# plot_voronoi(voronoi_cells, drone_starts, size)
+# plot_voronoi(vor, centroids)
+
+
+
+
 
 
 
