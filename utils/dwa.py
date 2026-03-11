@@ -44,8 +44,8 @@ def drone_model(pos, vel, acc, dt):
 
 class Drone:
 
-    acc_lim= 0.5 # m/s^2
-    vel_lim= 4 # m/s
+    acc_lim= 3 # m/s^2
+    vel_lim= 10 # m/s
     lim = []
     lim= list.append(vel_lim, acc_lim)
 
@@ -55,31 +55,31 @@ class Drone:
         self.speed= speed
         self.lim= lim
 
+    dt= 0.01 # Ts [s] (100 Hz)
+    N= 50 # timesteps
+    T_h= N*dt
     # Assuming drone class object with pos, vel, acc variables + limitations as list
-    def DWA(self):
+    def DWA(pos_i, vel_i, ref_j, acc_i, T_h, w1, w2):
 
-        # unpack drone's state
-        pos= self.pos
-        vel= self.vel
-        acc= self.acc
-        v_lim= self.lim[1]
-        a_lim= self.lim[2]
+        p_fin= drone_model(pos_i, vel_i, acc_i, T_h)
+        dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
+        sq_dist= np.sum(dist**2, axis=0)
+        C_dis= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
+        
+        C_obs= ...
+
 
         # choose k according to how many trajectories you want to generate
         k= 10
         # generate trajectories and save final positions and used control inputs
-        pos_list= []
-        dt= 0.1 # simulation time [s]
-        a_list= np.linspace(-a_lim, a_lim, k)
-        for a_k in a_list:
-            state_k= drone_model(pos, vel, a_k, dt)
-            pos_k= state_k[1]
-            vel_k= state_k[2]
+        pos_vec= np.array()
+        vel_vec= np.array ()
+        acc_vec= np.array()
 
-            if vel_k <= v_lim:
-                pos_list.append(pos_k)
-            else:
-                a_list.replace(a_k, NULL)
+
+        
+
+
 
 '''
 Tentative pseudo algo:
