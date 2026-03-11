@@ -42,6 +42,17 @@ def drone_model(pos, vel, acc, dt):
     res= list.append(pos_nxt, vel_nxt)
     return res
 
+def sample_acc(distribution, a_prev, num_samples, variance):
+
+    if distribution == "Normal":
+        a_norm= np.random(a_prev, variance, num_samples)
+    elif distribution == "Uniform":
+        a_uni= np.random(..., ..., num_samples - 150) #spero sia una cosa simile; hp num samples tipo 200
+    
+    a_vec= np.cat(a_norm, a_uni)
+
+    return a_vec
+
 class Drone:
 
     acc_lim= 3 # m/s^2
@@ -61,7 +72,15 @@ class Drone:
     # Assuming drone class object with pos, vel, acc variables + limitations as list
     def DWA(pos_i, vel_i, ref_j, acc_i, T_h, w1, w2):
 
-        p_fin= drone_model(pos_i, vel_i, acc_i, T_h)
+        for _ in range(3):
+            distrib= "Normal"
+            a_norm= sample_acc(distrib, a_prev, N_norm)
+            distrib= "Uniform"
+            a_uni= sample_acc(distrib, a_prev, N_uni)
+        
+        a_vec= np.cat(a_norm, a_uni)
+
+        p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dis= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
@@ -77,22 +96,7 @@ class Drone:
         acc_vec= np.array()
 
 
-        
 
-
-
-'''
-Tentative pseudo algo:
-1- run dwa for each drone;
-
-2- remove tentative points that have occupancy grid that would mean it collide or 
-out of assigned region through voronoi stuff; 
---> otherwise assign tentative points in assigned region and solve this problem directly
-
-3- solve optim problem to keep waypoints that minimize J = -mean(distance between drones)
-
-4- redo step 1 to 3 until the difference in J is less than a threshold or max iteration is reached
-'''
         
 
 
