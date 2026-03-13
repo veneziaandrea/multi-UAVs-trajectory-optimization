@@ -32,16 +32,14 @@ class obstacle:
         self.shape = Point(x, y).buffer(radius) # cylindrical obstacle represented as a circle in 2D
 
 # --- MAP GENERATION ---
-
 def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
     ''' Generate a 2D map with random obstacles and drone starting positions.
         Returns:
         - workspace: Shapely Polygon representing the boundaries of the map
         - obstacles: List of obstacle objects with geometric shapes
         - free_space: Shapely Polygon representing the free space in the map
-        - drone_starts: List of starting positions for the drones
-        
-        '''
+        - drone_starts: List of starting positions for the drones  
+    '''
 
     min_radius = 0.5
     max_radius = 1.5
@@ -137,8 +135,7 @@ def generate_occupancy_grid(workspace, obstacles, size):
             if any(obs.shape.contains(point) for obs in obstacles):
                 grid[j, i] = 1  # Note: swap i and j
             else:
-                grid[j, i] = 0  # Free
-
+                grid[j, i] = 0  # Free space
     return grid
 
 

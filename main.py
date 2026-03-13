@@ -1,25 +1,33 @@
+# Map generation and visualization
 from utils.map_generation import generate_drone_map
 from utils.map_generation import map_and_grid_visualization
 from utils.map_generation import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
 
+# Voronoi partitioning and visualization
 from partition.voronoi import voronoi_partition
 from partition.voronoi import plot_voronoi
-import numpy as np
 
+# PCA for dimensionality reduction and clustering for waypoint generation
+from utils.PCA import pca
+from utils.PCA import plot_pca
+
+import numpy as np
 from scipy.spatial import Voronoi
 from scipy.spatial import voronoi_plot_2d
 import matplotlib.pyplot as plt
 
 
 # 2D map generation parameters
-size = 20
-maxheight = 10
-num_obstacles = 20
-density = 0.5
-num_drones = 5  
+size = 20                           # size of the map (20x20)
+maxheight = 10                      # maximum height of obstacles
+num_obstacles = 20                  # number of obstacles to generate
+density = 0.5                       # density of obstacles
+num_drones = 5                      # number of drones
 
+# drone starting position selection
 drone_start = 'centered'  # 'random' or 'centered'
+
 
 # 2D map generation
 '''
@@ -50,11 +58,17 @@ else:
 # Voronoi partitioning
 vor= voronoi_partition(centroids)
 print("Voronoi partitioning completed.")
+print("Voronoi regions:", vor.regions)
+print("Voronoi vertices:", vor.vertices)
 
 # Visualize the Voronoi partitioning
-# plot_voronoi(vor, centroids)
+plot_voronoi(vor, centroids)
 
+# PCA for waypoint generation
+#waypoints = pca(vor)
 
+# Visualize the PCA waypoints
+# plot_pca(waypoints)
 
 
 
