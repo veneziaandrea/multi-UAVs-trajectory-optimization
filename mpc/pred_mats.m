@@ -12,9 +12,9 @@ Lambda = zeros(n*(N+1), n);
 Gamma  = zeros(n*(N+1), m*N);
 
 for k = 0:N
-    Lambda(n*k+1:n*(k+1), :) = A^k; % Fill Lambda with powers of A
+    Lambda(n*k+1:n*(k+1), :) = A^k;                                        % Fill Lambda with powers of A
     if k > 0
-        Gamma(n*k+1:n*(k+1), (k-1)*m+1:k*m) = B; % Fill Gamma with B
+        Gamma(n*k+1:n*(k+1), (k-1)*m+1:k*m) = B;                           % Fill Gamma with B
     end
 end
 

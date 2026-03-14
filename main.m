@@ -1,4 +1,4 @@
-% MAIN SCRIPT FOR THE PROJECT
+% MAIN SCRIPT
 
 clc
 clear all
@@ -15,8 +15,10 @@ addpath(resultsPath);
 addpath(mpcPath);
 addpath(docsPath);
 addpath(dataPath);
+
 %% MAP CREATION
 % define the map parameters
+
 l= 50; % length of one side of the map [m]
 density= 0.5; % how much of the area you want occupied; default= 0.5
 maxH= 10; % max height of the obstacles [m]
@@ -28,10 +30,20 @@ manualDPos= []; % if is desired to manually place drones inside the map; startin
 map = generateDroneMap(l, density, maxH, numObs, numDrones, manualDPos); % will also plot it
 
 %% Save the generated map to a .mat file for future use (optional)
+
 save('generated_drone_map.mat', 'map');
 % Optionally, load the generated map for verification
 % loadedMap = load('generated_drone_map.mat');
 % disp('Map loaded successfully. Displaying the map again for verification.');
+
+% Optionally, visualize the generated map
+figure;
+plot3(map(:,1), map(:,2), map(:,3), 'o');
+xlabel('X Position (m)');
+ylabel('Y Position (m)');
+zlabel('Height (m)');
+title('Generated Drone Map');
+grid on;
 
 %% OPTIMIZATION PARAMETERS (WAYPOINT GENERATION + MAX DISTANCE)
 % in this stage a Dynamic Window Approach is needed, since the waypoints
