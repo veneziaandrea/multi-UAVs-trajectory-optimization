@@ -78,33 +78,38 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
 
     drone_starts = np.array(drone_starts)
 
-    # Obstacle Generation + Occupancy Grid
+        # Obstacle Generation + Occupancy Grid
     obstacles = []
-    grid= np.zeros(size,size, dtype= np.uint16)
+    # Fixed: np.zeros expects a tuple for shape: (rows, cols)
+    grid = np.zeros((size, size), dtype=np.uint16)
     cell_size = workspace.bounds[2] / size
-    
+
     for _ in range(num_obstacles):
         valid_obstacle = False
         attempts = 0
         while not valid_obstacle and attempts < 50:
             attempts += 1
 
-            r = random.uniform(min_radius, max_radius)  # Random radius for obstacles
+            r = random.uniform(min_radius, max_radius)
+            # Assuming size here is the coordinate limit; 
+            # ensure these units match your workspace bounds
             x = random.uniform(inflation, size - inflation)
             y = random.uniform(inflation, size - inflation)
-            h = random.uniform(1, maxheight)  # Random height for obstacles
+            h = random.uniform(1, maxheight)
 
             valid_obstacle = True
+            
             # Ensure new obstacle doesn't overlap with existing ones
             for obs in obstacles:
-                d = np.sqrt((x - obs.x)**2 + (y-obs.y)**2) 
-
+                d = np.sqrt((x - obs.x)**2 + (y - obs.y)**2) 
                 if d < r + obs.radius + inflation:  
                     valid_obstacle = False
                     break
             
+            if not valid_obstacle: continue
+
             # Ensure new obstacle doesn't overlap with drone starting positions
-            safety_distance = 0.2  # Minimum distance from drone starting positions
+            safety_distance = 0.2
             for ds in drone_starts:
                 d = np.sqrt((x - ds[0])**2 + (y - ds[1])**2)
                 if d < r + safety_distance:
@@ -112,17 +117,26 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
                     break
 
         if valid_obstacle:
-            obstacles.append(obstacle(x, y, r, h))
-            for i in range(size):      # x-axis
-                for j in range(size):  # y-axis
-                    x = i * cell_size + cell_size / 2   # Center of the cell
-                    y = j * cell_size + cell_size / 2
-                    point = Point(x, y)
+            new_obs = obstacle(x, y, r, h)
+            obstacles.append(new_obs)
+            
+            # OPTIMIZATION: Instead of re-checking every cell in the grid for every obstacle,
+            # only check cells within the bounding box of the new obstacle.
+            
+            x_min = max(0, int((x - r) / cell_size))
+            x_max = min(size, int((x + r) / cell_size) + 1)
+            y_min = max(0, int((y - r) / cell_size))
+            y_max = min(size, int((y + r) / cell_size) + 1)
 
-                    if any(obs.shape.contains(point) for obs in obstacles):
-                        grid[j, i] = 1  # Note: swap i and j
-                    else:
-                        grid[j, i] = 0  # Free space
+            for i in range(x_min, x_max):
+                for j in range(y_min, y_max):
+                    # Calculate cell center
+                    cell_x = i * cell_size + cell_size / 2
+                    cell_y = j * cell_size + cell_size / 2
+                    point = Point(cell_x, cell_y)
+
+                    if new_obs.shape.contains(point):
+                        grid[j, i] = 1
 
     obstacle_union = unary_union([obs.shape for obs in obstacles])
 

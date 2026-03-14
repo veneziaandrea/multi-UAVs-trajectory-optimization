@@ -1,7 +1,7 @@
 # Map generation and visualization
-from utils.map_generation import generate_drone_map
-from utils.map_generation import map_and_grid_visualization
-from utils.map_generation import generate_occupancy_grid
+from utils.mapgen_v2 import generate_drone_map
+from utils.mapgen_v2 import map_and_grid_visualization
+#from utils.mapgen_v2 import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
 
 # Voronoi partitioning and visualization
@@ -36,17 +36,13 @@ obstacles are used for pyBullet simulation.
 occupancy grid is used for trajectory optimization.
 '''
 
-workspace, obstacles, free_space, drone_starts =  generate_drone_map(size, maxheight, num_obstacles, density, num_drones)
+workspace, obstacles, free_space, drone_starts, occupancy_grid =  generate_drone_map(size, maxheight, num_obstacles, density, num_drones)
 print("workspace:", workspace)
 # print("obstacles:", obstacles)
 # print("free_space:", free_space)    
 print("drone_starts:", drone_starts)
 
-<<<<<<< HEAD
 #occupancy_grid = generate_occupancy_grid(workspace, obstacles, size)
-=======
-occupancy_grid = generate_occupancy_grid(workspace, obstacles, size)
->>>>>>> 34a80b9c4671e320e44f88c8986263bdc530dc3d
 
 # k-means clustering to find optimal starting points for Voronoi partitioning
 if drone_start != 'random':
@@ -57,7 +53,7 @@ else:
 
 # Map visualization
 
-# map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
+map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
 
 # Voronoi partitioning
 vor= voronoi_partition(centroids)
