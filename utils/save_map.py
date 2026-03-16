@@ -2,12 +2,10 @@
 import pickle
 from pathlib import Path
 
+def save_map(workspace, occupancy_grid, obstacles, drone_starts, centroids, filename):
 
-
-def save_map(workspace, occupancy_grid, filename):
-
-    # Create a 'maps' folder if it doesn't exist
-    save_dir = Path("../data")
+    # Create a folder if it doesn't exist
+    save_dir = Path("data")
     save_dir.mkdir(parents=True, exist_ok=True)
     # Define the full path
     file_path = save_dir / f"{filename}.pkl"
@@ -15,9 +13,12 @@ def save_map(workspace, occupancy_grid, filename):
     # Bundle them together
     data_to_save = {
         "map": workspace,
-        "grid": occupancy_grid
+        "grid": occupancy_grid,
+        "obstacles": obstacles,
+        "drone_starts": drone_starts, #np.arrays
+        "centroids": centroids #np.arrays
     }
 
     # Save as a single file
-    with open("navigation_data.pkl", "wb") as f:
+    with open(file_path, "wb") as f:
         pickle.dump(data_to_save, f)

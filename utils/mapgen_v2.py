@@ -181,10 +181,10 @@ def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_gri
         ax_map.fill(ox, oy, color='gray', alpha=0.7)
         
     # Drone starting positions
-    if len(drone_starts) > 0:
+    if drone_starts is not None:
         ax_map.scatter(drone_starts[:, 0], drone_starts[:, 1], c='red', marker='x', label='Drone Starts')
     # Centroids from K-means
-    if len(centroids) > 0:
+    if centroids is not None:
         ax_map.scatter(centroids[:, 0], centroids[:, 1], c='blue', marker='o', label='K-means Centroids')
     
     ax_map.set_title("Drone Map with Obstacles")

@@ -6,6 +6,7 @@ from utils.kmeans import kmeans_clustering
 from utils.save_map import save_map 
 # to save and reload maps and occupancy grids
 import pickle
+from pathlib import Path
 
 # Voronoi partitioning and visualization
 from partition.voronoi import voronoi_partition
@@ -58,27 +59,34 @@ if reload_map == False:
         centroids = drone_starts
 
         # Map visualization
-    map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
+    map_and_grid_visualization(workspace, obstacles, drone_starts , occupancy_grid, centroids)
 
     user_choice = input("Do you want to save this map? (y/n): ").lower()
         
     if user_choice == 'y':
         filename = input("Enter map name: ")
-        save_map(workspace, occupancy_grid, filename)
+        save_map(workspace, occupancy_grid, obstacles, drone_starts, centroids, filename)
         print(f"Map saved as {filename}.pkl")
     else:
         print("Map discarded.")
 
 else: 
+    filename= input("Write name of the map you want to load (without .pkl): ")
+    filename= f"{filename}.pkl"
+    maps_path= Path("data")
+    file_path= maps_path / filename
     # Reload the map object
-    with open("navigation_data.pkl", "rb") as f:
+    with open(file_path, "rb") as f:
         loaded_data = pickle.load(f)
 
     # Assign back to variables
     workspace = loaded_data["map"]
     occupancy_grid = loaded_data["grid"]
+    obstacles= loaded_data["obstacles"]
+    drone_starts= loaded_data["drone_starts"]
+    centroids= loaded_data["centroids"]
 
-
+    map_and_grid_visualization(workspace, obstacles, drone_starts , occupancy_grid, centroids)
 
 # Voronoi partitioning
 vor= voronoi_partition(centroids)
