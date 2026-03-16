@@ -208,6 +208,3 @@ def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_gri
 
     plt.tight_layout()
     plt.show(block=False)
-
-    while True:
-        plt.pause(1)

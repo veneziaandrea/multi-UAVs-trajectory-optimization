@@ -1,6 +1,6 @@
 import numpy as np
 import scipy as sci
-from ... import casadi as ca
+import casadi as ca
 import random
 
 '''

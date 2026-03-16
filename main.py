@@ -21,13 +21,13 @@ from scipy.spatial import voronoi_plot_2d
 import matplotlib.pyplot as plt
 
 # MODIFY THIS AT THE START !
-reload_map= False
+reload_map= True
 
 if reload_map == False:
     # 2D map generation parameters
-    size = 20                           # size of the map (20x20)
+    size = 50                           # size of the map (20x20)
     maxheight = 10                      # maximum height of obstacles
-    num_obstacles = 20                  # number of obstacles to generate
+    num_obstacles = 40                  # number of obstacles to generate
     density = 0.5                       # density of obstacles
     num_drones = 5                      # number of drones
 
@@ -57,9 +57,20 @@ if reload_map == False:
     else:
         centroids = drone_starts
 
+        # Map visualization
+    map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
+
+    user_choice = input("Do you want to save this map? (y/n): ").lower()
+        
+    if user_choice == 'y':
+        filename = input("Enter map name: ")
+        save_map(workspace, occupancy_grid, filename)
+        print(f"Map saved as {filename}.pkl")
+    else:
+        print("Map discarded.")
+
 else: 
     # Reload the map object
-# Reload the bundle
     with open("navigation_data.pkl", "rb") as f:
         loaded_data = pickle.load(f)
 
@@ -67,8 +78,7 @@ else:
     workspace = loaded_data["map"]
     occupancy_grid = loaded_data["grid"]
 
-# Map visualization
-map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
+
 
 # Voronoi partitioning
 vor= voronoi_partition(centroids)
@@ -79,11 +89,6 @@ print("Voronoi vertices:", vor.vertices)
 # Visualize the Voronoi partitioning
 plot_voronoi(vor, centroids)
 
-# PCA for waypoint generation
-#waypoints = pca(vor)
-
-# Visualize the PCA waypoints
-# plot_pca(waypoints)
 
 
 
