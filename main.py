@@ -95,7 +95,7 @@ print("Voronoi regions:", vor.regions)
 print("Voronoi vertices:", vor.vertices)
 
 # Visualize the Voronoi partitioning
-plot_voronoi(vor, centroids)
+#plot_voronoi(vor, centroids)
 
 
 

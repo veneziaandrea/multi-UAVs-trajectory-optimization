@@ -81,8 +81,9 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
         # Obstacle Generation + Occupancy Grid
     obstacles = []
     # Fixed: np.zeros expects a tuple for shape: (rows, cols)
-    grid = np.zeros((size, size), dtype=np.uint16)
-    cell_size = workspace.bounds[2] / size
+    res_size= 200
+    grid = np.zeros((res_size, res_size), dtype=np.uint16)
+    cell_size = workspace.bounds[2] / res_size
 
     for _ in range(num_obstacles):
         valid_obstacle = False
@@ -124,9 +125,9 @@ def generate_drone_map(size, maxheight, num_obstacles, density, num_drones):
             # only check cells within the bounding box of the new obstacle.
             
             x_min = max(0, int((x - r) / cell_size))
-            x_max = min(size, int((x + r) / cell_size) + 1)
+            x_max = min(res_size, int((x + r) / cell_size) + 1)
             y_min = max(0, int((y - r) / cell_size))
-            y_max = min(size, int((y + r) / cell_size) + 1)
+            y_max = min(res_size, int((y + r) / cell_size) + 1)
 
             for i in range(x_min, x_max):
                 for j in range(y_min, y_max):
@@ -168,6 +169,9 @@ def generate_occupancy_grid(workspace, obstacles, size):
 
 # --- VISUALIZATION ---
 def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids):
+
+    plt.ion()
+
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))  # Two subplots side by side
 
     # ---------------- Map subplot ----------------
@@ -207,4 +211,5 @@ def map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_gri
     plt.colorbar(ax_grid.images[0], ax=ax_grid, label='Occupied')
 
     plt.tight_layout()
-    plt.show(block=False)
+    plt.draw()
+    plt.pause(10)
