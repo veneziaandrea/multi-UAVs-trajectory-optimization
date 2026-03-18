@@ -5,27 +5,15 @@ import matplotlib.pyplot as plt
 # This module can be used to analyze the free space and identify key waypoints for trajectory optimization.
 # PCA can help in reducing the dimensionality of the free space representation, making it easier to identify clusters of free space and generate waypoints for the drones to follow.
 
-def pca(voronoi_cells):
+def pca(vertices):
     '''Perform PCA on the Voronoi cells to identify key waypoints for trajectory optimization
     
     Input:
-    - voronoi_cells: List of Voronoi cells representing the free space (Shapely Polygons)
-        vor cell structure: 
-        - vor.points        generator points
-        - vor.vertices      voronoi vertices
-        - vor.regions       region index lists
-        - vor.point_region  mapping point → region
+    - vertices: Array of vertices representing the free space
     Output:
     - waypoints: List of key waypoints identified through PCA
-
     '''
     
-    # Extract the vertices of the Voronoi cells
-    vertices = []
-    for cell in voronoi_cells:
-        vertices.extend(voronoi_cells[cell].vertices)   
-    vertices = np.array(vertices)   # Convert to numpy array for PCA
-
     # Centroid calculation
     centroid = np.mean(vertices, axis=0)
 

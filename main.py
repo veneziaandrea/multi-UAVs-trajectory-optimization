@@ -5,16 +5,9 @@ from utils.map_generation import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
 
 # Voronoi partitioning and visualization
-from partition.voronoi import voronoi_partition
-from partition.voronoi import plot_voronoi
-
-# PCA for dimensionality reduction and clustering for waypoint generation
-from utils.PCA import pca
-from utils.PCA import plot_pca
+from partition.voronoi import voronoi_partition, plot_voronoi
 
 import numpy as np
-from scipy.spatial import Voronoi
-from scipy.spatial import voronoi_plot_2d
 import matplotlib.pyplot as plt
 
 
@@ -35,8 +28,9 @@ free_space is used for Voronoi tessellation.
 obstacles are used for pyBullet simulation.
 occupancy grid is used for trajectory optimization.
 '''
-
+print("Generating map...")
 workspace, obstacles, free_space, drone_starts =  generate_drone_map(size, maxheight, num_obstacles, density, num_drones)
+print("Map generation completed.")
 print("workspace:", workspace)
 # print("obstacles:", obstacles)
 # print("free_space:", free_space)    
@@ -56,19 +50,12 @@ else:
 # map_and_grid_visualization(workspace, obstacles, drone_starts, occupancy_grid, centroids)
 
 # Voronoi partitioning
-vor= voronoi_partition(centroids)
-print("Voronoi partitioning completed.")
-print("Voronoi regions:", vor.regions)
-print("Voronoi vertices:", vor.vertices)
+vor, voronoi_cells = voronoi_partition(centroids, size)
+
 
 # Visualize the Voronoi partitioning
-plot_voronoi(vor, centroids)
+plot_voronoi(vor, drone_starts, size)
 
-# PCA for waypoint generation
-#waypoints = pca(vor)
-
-# Visualize the PCA waypoints
-# plot_pca(waypoints)
 
 
 
