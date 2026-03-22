@@ -59,6 +59,4 @@ def plot_voronoi(vor, drone_starts, size):
     plt.grid()
     plt.show(block=False)
 
-    while True:
-        plt.pause(1)
     
