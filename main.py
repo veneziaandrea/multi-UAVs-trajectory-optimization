@@ -4,7 +4,11 @@ from utils.mapgen_v2 import map_and_grid_visualization
 #from utils.mapgen_v2 import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
 from utils.save_map import save_map
-import utils.dwa
+from utils.dwa import drone_model
+from utils.dwa import sample_acc
+from utils.dwa import compute_obstacles_cost
+from utils.dwa import plot_dwa_results
+from utils.dwa import Drone
 
 # to save and reload maps and occupancy grids
 import pickle

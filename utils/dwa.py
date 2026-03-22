@@ -36,24 +36,6 @@ except:
     print(f"Valori debug: x={opti.debug.value(x)}")
     '''
 
-def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot):
-    """
-    p_i_final: array (3, N) dei waypoint finali campionati
-    kd_tree: obstacles cartesian points converted to scipy.spatial.KDTree
-    raggio_sicurezza: float, minimum tolered distance
-    N_tot: int, number of acceleration samples
-    """
-    min_dist, _ = kd_tree.query(p_i_final.T)
-    C_obstacle = np.zeros(N_tot)
-    in_collision = min_dist <= safety_radius
-    safe = min_dist > safety_radius
-    C_obstacle[in_collision] = 1e6
-    C_obstacle[safe] = 1.0 / (min_dist[safe] - safety_radius + 1e-6)
-
-    return C_obstacle
-
-
-
 def drone_model(pos, vel, acc, dt):
     pos_nxt= pos + vel*dt + 0.5*acc*(dt**2)
     vel_nxt= vel + acc*dt
@@ -97,6 +79,22 @@ def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=
     a_sample = np.hstack((a_sample_warm, a_sample_explore))
     
     return a_sample
+
+def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot):
+    """
+    p_i_final: array (3, N) dei waypoint finali campionati
+    kd_tree: obstacles cartesian points converted to scipy.spatial.KDTree
+    raggio_sicurezza: float, minimum tolered distance
+    N_tot: int, number of acceleration samples
+    """
+    min_dist, _ = kd_tree.query(p_i_final.T)
+    C_obstacle = np.zeros(N_tot)
+    in_collision = min_dist <= safety_radius
+    safe = min_dist > safety_radius
+    C_obstacle[in_collision] = 1e6
+    C_obstacle[safe] = 1.0 / (min_dist[safe] - safety_radius + 1e-6)
+
+    return C_obstacle
 
 class Drone:
 
