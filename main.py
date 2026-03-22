@@ -8,6 +8,8 @@ from utils.save_map import save_map
 import pickle
 from pathlib import Path
 
+from scipy.spatial import KDTree
+
 # Voronoi partitioning and visualization
 from partition.voronoi import voronoi_partition, plot_voronoi
 
@@ -16,10 +18,11 @@ import matplotlib.pyplot as plt
 
 # MODIFY THIS AT THE START !
 reload_map= True
+# size of the map sizexsize
+size = 50  
 
 if reload_map == False:
-    # 2D map generation parameters
-    size = 50                           # size of the map (20x20)
+    # 2D map generation parameters                         # size of the map (20x20)
     maxheight = 10                      # maximum height of obstacles
     num_obstacles = 40                  # number of obstacles to generate
     density = 0.5                       # density of obstacles
@@ -84,9 +87,14 @@ else:
 # Voronoi partitioning
 vor, voronoi_cells = voronoi_partition(centroids, size)
 
-
 # Visualize the Voronoi partitioning
 plot_voronoi(vor, drone_starts, size)
+
+# Crea l'albero di ricerca spaziale (Questa operazione si fa UNA SOLA VOLTA all'avvio)
+kd_tree_ostacoli = KDTree(obstacles)
+
+# Definisci le dimensioni del tuo quadricottero più un margine di sicurezza
+safe_radius = 0.5 # metri
 
 
 
