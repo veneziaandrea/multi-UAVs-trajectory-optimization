@@ -3,7 +3,9 @@ from utils.mapgen_v2 import generate_drone_map
 from utils.mapgen_v2 import map_and_grid_visualization
 #from utils.mapgen_v2 import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
-from utils.save_map import save_map 
+from utils.save_map import save_map
+import utils.dwa
+
 # to save and reload maps and occupancy grids
 import pickle
 from pathlib import Path
@@ -90,11 +92,22 @@ vor, voronoi_cells = voronoi_partition(centroids, size)
 # Visualize the Voronoi partitioning
 plot_voronoi(vor, drone_starts, size)
 
-# Crea l'albero di ricerca spaziale (Questa operazione si fa UNA SOLA VOLTA all'avvio)
-kd_tree_ostacoli = KDTree(obstacles)
+# -------------------------------------------------------------------------------------------------------
+# REGION ASSIGNEMENT TO BE DONE (BUT COULD WORK WITHOUT MAYBE)
+# ---------------------------------------------------------------------------------------------------------
+# DWA WAYPOINT GENERATION
 
-# Definisci le dimensioni del tuo quadricottero più un margine di sicurezza
-safe_radius = 0.5 # metri
+# Crea l'albero di ricerca spaziale 
+kd_tree_obstacles = KDTree(obstacles)
+# safety margin for each drone
+safe_radius = 0.5 # [m]
+
+# DWA PIPELINE TO BE IMPLEMENTED
+for i in range(len(drone_starts)):
+    drone= Drone(drone, i, drone_starts[i])
+    for _ in range(3):
+        sample_acc()
+
 
 
 

@@ -64,7 +64,7 @@ def drone_model(pos, vel, acc, dt):
 def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=0.3):
 
     """
-    Genera la matrice dei campioni di accelerazione (3, N_tot) usando una strategia ibrida.
+    Generate the acceleration samples matrix(3, N_tot) 
     
     a_prev: array (3, 1), acceleration chosen the previous iteration
     a_dw_min: array (3, 1), minimum acceleration
@@ -105,10 +105,10 @@ class Drone:
     lim = []
     lim= list.append(vel_lim, acc_lim)
 
-    def __init__ (self, i, position, speed, lim):
-        self.id = "d_{i}"
+    def __init__ (self, i, position, lim):
+        self.id = f"d_{i}"
         self.pos= position
-        self.speed= speed
+        self.speed= np.zeros(3)
         self.lim= lim
         self.a_prev= np.zeros(3)
 
