@@ -133,7 +133,7 @@ class Drone:
 
         return pos_i[best_idx], a_vec[best_idx], J[best_idx], best_idx
     
-def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, delta_J_max=1.0):
+def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta_J_max=1.0):
     """
     Visualizza in 3D la posizione attuale, gli ostacoli e il fascio di waypoint futuri
     che soddisfano il criterio di costo.

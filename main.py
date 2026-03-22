@@ -98,19 +98,91 @@ plot_voronoi(vor, drone_starts, size)
 
 # -------------------------------------------------------------------------------------------------------
 # REGION ASSIGNEMENT TO BE DONE (BUT COULD WORK WITHOUT MAYBE)
+
 # ---------------------------------------------------------------------------------------------------------
 # DWA WAYPOINT GENERATION
 
-# Crea l'albero di ricerca spaziale 
-kd_tree_obstacles = KDTree(obstacles)
-# safety margin for each drone
-safe_radius = 0.5 # [m]
+'''TO BE TESTED'''
+# Create obstacles object in a way that is actually fast to use 
+obs_tree = KDTree(obstacles)
 
-# DWA PIPELINE TO BE IMPLEMENTED
+# Problem initialization
+safe_radius = 0.5 
+N_tot = 300
+num_iter = 1000 
+iter_count = 0
+
+# Convert physical states to lists so EVERY drone has its own independent history
+pos_i = list(drone_starts) 
+vel_i = [np.zeros(3) for _ in range(len(drone_starts))]
+a_prev = [np.zeros(3) for _ in range(len(drone_starts))]
+
+lim = [Drone.vel_lim, Drone.acc_lim]
+
+# Calculate distances to centroids
+dist_centr = np.zeros((len(drone_starts), len(centroids))) 
 for i in range(len(drone_starts)):
-    drone= Drone(drone, i, drone_starts[i])
-    for _ in range(3):
-        sample_acc()
+    for j in range(len(centroids)):
+        dist_centr[i][j] = np.sum((centroids[j] - drone_starts[i])**2)
+
+closer_centroids = [np.argmin(dist_centr[i]) for i in range(len(drone_starts))] 
+
+# Initialize reference array. If ref_j is used by DWA to avoid other drones, 
+# it MUST be initialized as their starting 3D positions, not integer indices.
+ref_j = list(drone_starts) 
+drones = [None] * len(drone_starts) 
+
+for i in range(len(drone_starts)):
+    drones[i] = Drone(i, drone_starts[i], lim)
+    # If drones need to know their target centroid, pass it to the object directly
+    drones[i].target_centroid = centroids[closer_centroids[i]]
+
+acc_star = [None] * len(drone_starts) 
+waypoints = [None] * len(drone_starts) 
+best_idx = [None] * len(drone_starts) 
+J_min_vec = np.zeros(len(drone_starts)) 
+
+# Opt problem: Now represents physical TIME STEPS, not convergence of a single step
+while iter_count <= num_iter: 
+    
+    # 1. Distributed Planning Phase
+    for i in range(len(drone_starts)):
+        # Pass the i-th drone's specific state variables
+        waypoints[i], acc_star[i], J_min_vec[i], best_idx[i] = drones[i].DWA(
+            pos_i[i], 
+            vel_i[i], 
+            ref_j,       # Current positions of all drones for dispersion
+            a_prev[i],   # This drone's specific warm start
+            Drone.acc_lim, 
+            Drone.T_h, 
+            Drone.w1, 
+            Drone.w2, 
+            obs_tree, 
+            safe_radius
+        )
+    
+    # 2. Execution / Kinematic Update Phase
+    # We update the states ONLY AFTER all drones have planned, 
+    # to maintain synchronous behavior and avoid unfair advantages.
+    for i in range(len(drone_starts)):
+        # Update physical states for the next time step
+        pos_i[i] = waypoints[i] 
+        vel_i[i] = vel_i[i] + acc_star[i] * Drone.T_h # Basic Euler integration
+        a_prev[i] = acc_star[i]
+        
+        # Update the shared reference map for the next loop
+        ref_j[i] = waypoints[i] 
+
+    iter_count += 1
+    
+    # Optional: Break the loop early if all drones have reached their centroids
+    # (You would need to define a distance threshold check here)
+
+plot_dwa_results(waypoints)
+
+
+
+        
 
 
 
