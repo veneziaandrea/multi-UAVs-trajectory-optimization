@@ -149,11 +149,21 @@ class Drone:
 
         J= w1*C_dist + w2*C_obs
 
-        # Identify any trajectory that goes under the map (Z coordinate < 0)
-        underground_mask = p_fin[2, :] < 0 
+        # 1. Floor & Ceiling Penalty (Z-axis)
+        z_too_low = p_fin[2, :] < 0
+        z_too_high = p_fin[2, :] > 10.0  # Match your map height
         
-        # Apply a massive cost penalty to those specific trajectories
-        J[underground_mask] += 1e6
+        # 2. Map Boundary Penalty (X and Y axis)
+        # Assuming map is 0 to 50 (size of the map), adjust if different
+        out_of_bounds_x = (p_fin[0, :] < 0) | (p_fin[0, :] > 50)
+        out_of_bounds_y = (p_fin[1, :] < 0) | (p_fin[1, :] > 50)
+
+        # Apply massive cost to any trajectory that leaves the "safety box"
+        invalid_mask = z_too_low | z_too_high | out_of_bounds_x | out_of_bounds_y
+        J[invalid_mask] += 1e6
+
+        best_idx = np.argmin(J)
+        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
 
         best_idx= np.argmin(J)
 
