@@ -7,7 +7,7 @@ from utils.save_map import save_map
 from utils.dwa import drone_model
 from utils.dwa import sample_acc
 from utils.dwa import compute_obstacles_cost
-from utils.dwa import plot_dwa_results
+from utils.dwa import plot_final_trajectories
 from utils.dwa import Drone
 
 # to save and reload maps and occupancy grids
@@ -20,7 +20,11 @@ from scipy.spatial import KDTree
 from partition.voronoi import voronoi_partition, plot_voronoi
 
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
+import numpy as np
+# ... rest of your imports
 
 # MODIFY THIS AT THE START !
 reload_map= True
@@ -172,6 +176,7 @@ while iter_count <= num_iter:
     # 2. Execution / Kinematic Update Phase
     # We update the states ONLY AFTER all drones have planned, 
     # to maintain synchronous behavior and avoid unfair advantages.
+    trajectory_history = [[np.array(start)] for start in drone_starts] # for recording trajectories for plotting at the end
     for i in range(len(drone_starts)):
         # Update physical states for the next time step
         pos_i[i] = waypoints[i] 
@@ -180,13 +185,18 @@ while iter_count <= num_iter:
         
         # Update the shared reference map for the next loop
         ref_j[i] = waypoints[i] 
+        # RECORDING: Save the chosen waypoint into that drone's history
+        trajectory_history[i].append(np.array(waypoints[i]))
 
     iter_count += 1
     
     # Optional: Break the loop early if all drones have reached their centroids
     # (You would need to define a distance threshold check here)
 print("DWA optimization completed.")
-# plot_dwa_results(waypoints)
+
+# AFTER the loop finishes, call the final plot
+plot_final_trajectories(trajectory_history, loaded_data["obstacles"], [d.id for d in drones])
+
 
 
 
