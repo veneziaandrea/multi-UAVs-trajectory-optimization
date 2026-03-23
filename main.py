@@ -37,7 +37,6 @@ if reload_map == False:
     # drone starting position selection
     drone_start = 'centered'  # 'random' or 'centered'
 
-
     # 2D map generation
     '''
     free_space is used for Voronoi tessellation.
@@ -103,8 +102,16 @@ plot_voronoi(vor, drone_starts, size)
 # DWA WAYPOINT GENERATION
 
 '''TO BE TESTED'''
+# Extract 3D coordinates (x, y, and half the height for the z-center)
+obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in obstacles])
+# Create an array of radii to match the order of the tree
+obs_radii = np.array([obs.radius for obs in obstacles])
 # Create obstacles object in a way that is actually fast to use 
-obs_tree = KDTree(obstacles)
+obs_tree = KDTree(obstacle_coords)
+
+# Make drone starts actually in 3D  
+# Loop through each [x, y] pair and create a new 3D numpy array
+drone_starts = [np.array([start[0], start[1], 0.0]) for start in drone_starts]
 
 # Problem initialization
 safe_radius = 0.5 
@@ -121,9 +128,6 @@ lim = [Drone.vel_lim, Drone.acc_lim]
 
 # Calculate distances to centroids
 dist_centr = np.zeros((len(drone_starts), len(centroids))) 
-for i in range(len(drone_starts)):
-    for j in range(len(centroids)):
-        dist_centr[i][j] = np.sum((centroids[j] - drone_starts[i])**2)
 
 closer_centroids = [np.argmin(dist_centr[i]) for i in range(len(drone_starts))] 
 
@@ -132,10 +136,13 @@ closer_centroids = [np.argmin(dist_centr[i]) for i in range(len(drone_starts))]
 ref_j = list(drone_starts) 
 drones = [None] * len(drone_starts) 
 
+# create drone objects and assign as starting reference the closest centroid
 for i in range(len(drone_starts)):
-    drones[i] = Drone(i, drone_starts[i], lim)
-    # If drones need to know their target centroid, pass it to the object directly
-    drones[i].target_centroid = centroids[closer_centroids[i]]
+    drones[i]= Drone(i, drone_starts[i], lim)
+    
+    # FIXED: Extract the 2D coordinates using the index, and append 0.0 for the Z-axis
+    c_idx = closer_centroids[i]
+    ref_j[i] = np.array([centroids[c_idx][0], centroids[c_idx][1], 0.0])
 
 acc_star = [None] * len(drone_starts) 
 waypoints = [None] * len(drone_starts) 
@@ -178,7 +185,7 @@ while iter_count <= num_iter:
     # Optional: Break the loop early if all drones have reached their centroids
     # (You would need to define a distance threshold check here)
 
-plot_dwa_results(waypoints)
+# plot_dwa_results(waypoints)
 
 
 

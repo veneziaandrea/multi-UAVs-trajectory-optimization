@@ -1,6 +1,6 @@
 import numpy as np
 import scipy as sci
-import casadi as ca
+#import casadi as ca
 import matplotlib.pyplot as plt
 
 '''
@@ -62,13 +62,14 @@ def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=
     
     # 1. WARM START (Sfruttamento locale tramite Gaussiana)
     # Genera N_warm campioni per le 3 componenti (x, y, z) centrati su a_previous.
-    a_sample_warm = np.random.normal(loc=a_previous, scale=sigma, size=(3, N_warm))
+    # FIXED: Added [:, np.newaxis] to reshape a_previous from (3,) to (3, 1) for broadcasting
+    a_sample_warm = np.random.normal(loc=a_previous[:, np.newaxis], scale=sigma, size=(3, N_warm))
     
     # Una distribuzione normale ha code infinite, quindi alcuni campioni potrebbero 
     # finire fuori dalla finestra dinamica ammissibile. Li "tagliamo" ai limiti fisici.
     a_sample_warm = np.clip(a_sample_warm, a_dw_min, a_dw_max)
 
-    #Campionamento Uniforme Globale
+    # Campionamento Uniforme Globale
     # Genera numeri pseudo-casuali uniformi tra 0 e 1, dimensione (3, N_explore)
     random_base = np.random.rand(3, N_explore)
     
@@ -79,20 +80,30 @@ def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=
     a_sample = np.hstack((a_sample_warm, a_sample_explore))
     
     return a_sample
+    
 
-def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot):
+def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot, obs_radii):
     """
     p_i_final: array (3, N) dei waypoint finali campionati
     kd_tree: obstacles cartesian points converted to scipy.spatial.KDTree
     raggio_sicurezza: float, minimum tolered distance
     N_tot: int, number of acceleration samples
     """
-    min_dist, _ = kd_tree.query(p_i_final.T)
+    # FIXED: Removed slicing to query all 3 dimensions (p_i_final.T)
+    # FIXED: Captured nearest_idx to look up the corresponding radius
+    min_dist, nearest_idx = kd_tree.query(p_i_final.T)
+    
+    # FIXED: Fetch the specific radius for the closest obstacle
+    nearest_radii = obs_radii[nearest_idx]
+    
+    # FIXED: Calculate the true distance to the obstacle surface
+    true_dist = min_dist - nearest_radii
+    
     C_obstacle = np.zeros(N_tot)
-    in_collision = min_dist <= safety_radius
-    safe = min_dist > safety_radius
+    in_collision = true_dist <= safety_radius
+    safe = true_dist > safety_radius
     C_obstacle[in_collision] = 1e6
-    C_obstacle[safe] = 1.0 / (min_dist[safe] - safety_radius + 1e-6)
+    C_obstacle[safe] = 1.0 / (true_dist[safe] - safety_radius + 1e-6)
 
     return C_obstacle
 
@@ -100,8 +111,7 @@ class Drone:
 
     acc_lim= 3 # m/s^2
     vel_lim= 10 # m/s
-    lim = []
-    lim= list.append(vel_lim, acc_lim)
+    lim = [vel_lim, acc_lim]
 
     def __init__ (self, i, position, lim):
         self.id = f"d_{i}"
@@ -118,7 +128,7 @@ class Drone:
     safe_rad= 0.3 # safe distance from obstacles [m]
 
     # Assuming drone class object with pos, vel, acc variables
-    def DWA(pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad):
+    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad):
         N_tot= 300
         a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
@@ -128,6 +138,12 @@ class Drone:
         C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot)
 
         J= w1*C_dist + w2*C_obs
+
+        # Identify any trajectory that goes under the map (Z coordinate < 0)
+        underground_mask = p_fin[2, :] < 0 
+        
+        # Apply a massive cost penalty to those specific trajectories
+        J[underground_mask] += 1e6
 
         best_idx= np.argmin(J)
 
@@ -155,7 +171,6 @@ def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta
     ax.scatter(mappa_ostacoli[:, 0], mappa_ostacoli[:, 1], mappa_ostacoli[:, 2], 
                c='gray', alpha=0.1, s=10, label="Ostacoli")
 
-    
     # Creiamo una maschera booleana: True per i sample che rientrano nel delta tollerato
     maschera_accettabili = J <= (J_min + delta_J_max)
     
