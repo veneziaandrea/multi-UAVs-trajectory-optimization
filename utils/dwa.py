@@ -37,8 +37,9 @@ except:
     '''
 
 def drone_model(pos, vel, acc, dt):
-    pos_nxt= pos + vel*dt + 0.5*acc*(dt**2)
-    vel_nxt= vel + acc*dt
+    # Enforces strict (3, 1) column vectors using reshape for flawless, zero-cost broadcasting
+    pos_nxt = pos.reshape(3, 1) + vel.reshape(3, 1) * dt + 0.5 * acc * (dt**2)
+    vel_nxt= vel.reshape(3, 1) + acc*dt
     acc_nxt= acc 
 
     return pos_nxt, vel_nxt
@@ -128,14 +129,24 @@ class Drone:
     safe_rad= 0.3 # safe distance from obstacles [m]
 
     # Assuming drone class object with pos, vel, acc variables
-    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad):
+    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
+
         N_tot= 300
         a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
+
+        # Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
+        if isinstance(p_fin, tuple):
+            p_fin = p_fin[0]
+        p_fin = np.array(p_fin)
+
+        # FIXED: Convert ref_j from a list to a numpy array, and transpose it to align the coordinates (3, N_targets)
+        ref_j = np.array(ref_j).T
+
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-        C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot)
+        C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
         J= w1*C_dist + w2*C_obs
 
@@ -147,7 +158,7 @@ class Drone:
 
         best_idx= np.argmin(J)
 
-        return pos_i[best_idx], a_vec[best_idx], J[best_idx], best_idx
+        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
     
 def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta_J_max=1.0):
     """

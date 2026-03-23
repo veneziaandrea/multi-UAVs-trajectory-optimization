@@ -165,7 +165,8 @@ while iter_count <= num_iter:
             Drone.w1, 
             Drone.w2, 
             obs_tree, 
-            safe_radius
+            safe_radius, 
+            obs_radii
         )
     
     # 2. Execution / Kinematic Update Phase
@@ -184,7 +185,7 @@ while iter_count <= num_iter:
     
     # Optional: Break the loop early if all drones have reached their centroids
     # (You would need to define a distance threshold check here)
-
+print("DWA optimization completed.")
 # plot_dwa_results(waypoints)
 
 
