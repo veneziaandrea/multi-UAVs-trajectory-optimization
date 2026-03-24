@@ -7,7 +7,7 @@ from utils.save_map import save_map
 from utils.dwa import drone_model
 from utils.dwa import sample_acc
 from utils.dwa import compute_obstacles_cost
-from utils.dwa import plot_dwa_results
+from utils.dwa import plot_final_trajectories
 from utils.dwa import Drone
 
 # to save and reload maps and occupancy grids
@@ -149,6 +149,8 @@ waypoints = [None] * len(drone_starts)
 best_idx = [None] * len(drone_starts) 
 J_min_vec = np.zeros(len(drone_starts)) 
 
+# Create a list of lists to store the path history for each drone
+trajectory_history = [[np.array(start)] for start in drone_starts]
 # Opt problem: Now represents physical TIME STEPS, not convergence of a single step
 while iter_count <= num_iter: 
     
@@ -165,7 +167,8 @@ while iter_count <= num_iter:
             Drone.w1, 
             Drone.w2, 
             obs_tree, 
-            safe_radius
+            safe_radius,
+            obs_radii
         )
     
     # 2. Execution / Kinematic Update Phase
@@ -179,13 +182,19 @@ while iter_count <= num_iter:
         
         # Update the shared reference map for the next loop
         ref_j[i] = waypoints[i] 
+        # Append the newly chosen 3D waypoint to this specific drone's history
+        trajectory_history[i].append(np.array(waypoints[i]))
 
     iter_count += 1
     
     # Optional: Break the loop early if all drones have reached their centroids
     # (You would need to define a distance threshold check here)
 
-# plot_dwa_results(waypoints)
+# RIGHT: Use the original list of objects
+plot_final_trajectories(trajectory_history, loaded_data["obstacles"], [d.id for d in drones])
+
+# WRONG (causes your error):
+# plot_final_trajectories(trajectory_history, obstacle_coords, [d.id for d in drones])
 
 
 

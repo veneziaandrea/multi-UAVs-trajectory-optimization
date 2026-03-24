@@ -37,8 +37,8 @@ except:
     '''
 
 def drone_model(pos, vel, acc, dt):
-    pos_nxt= pos + vel*dt + 0.5*acc*(dt**2)
-    vel_nxt= vel + acc*dt
+    pos_nxt= pos.reshape(3,1) + vel.reshape(3,1)*dt + 0.5*acc*(dt**2)
+    vel_nxt= vel.reshape(3,1) + acc*dt
     acc_nxt= acc 
 
     return pos_nxt, vel_nxt
@@ -128,26 +128,43 @@ class Drone:
     safe_rad= 0.3 # safe distance from obstacles [m]
 
     # Assuming drone class object with pos, vel, acc variables
-    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad):
+    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
         N_tot= 300
         a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
+
+        # FIXED: Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
+        if isinstance(p_fin, tuple):
+            p_fin = p_fin[0]
+        p_fin = np.array(p_fin)
+
+        # FIXED: Convert ref_j from a list to a numpy array, and transpose it to align the coordinates (3, N_targets)
+        ref_j = np.array(ref_j).T
+
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-        C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot)
+        dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
+        sq_dist= np.sum(dist**2, axis=0)
+        C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
+        C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
         J= w1*C_dist + w2*C_obs
 
         # Identify any trajectory that goes under the map (Z coordinate < 0)
         underground_mask = p_fin[2, :] < 0 
+        higher_limit_mask= p_fin[2,:] > 10
+        size_x_map_mask= p_fin[0, :] > 50
+        size_y_map_mask= p_fin[1,:] > 50
+
+        invalid_point_mask = underground_mask | higher_limit_mask | size_x_map_mask | size_y_map_mask
         
         # Apply a massive cost penalty to those specific trajectories
-        J[underground_mask] += 1e6
+        J[invalid_point_mask] += 1e6
 
         best_idx= np.argmin(J)
 
-        return pos_i[best_idx], a_vec[best_idx], J[best_idx], best_idx
+        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
     
 def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta_J_max=1.0):
     """
@@ -207,6 +224,50 @@ def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta
     ax.set_box_aspect([1, 1, 1])
     ax.legend()
     plt.show()
+
+def plot_final_trajectories(trajectory_history, obstacles, drone_ids):
+    """
+    Plots the full path for all drones and draws 3D cylinders for obstacles.
+    """
+    fig = plt.figure(figsize=(12, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=20, azim=45)
+    
+    # 1. DRAW REAL CYLINDRICAL OBSTACLES
+    # We iterate over the original list of objects to access .height and .radius
+    for obs in obstacles:
+        # Create cylinder mesh
+        z_range = np.linspace(0, obs.height, 10)
+        theta = np.linspace(0, 2*np.pi, 20)
+        theta_grid, z_grid = np.meshgrid(theta, z_range)
+        
+        # Parametric equations for a cylinder
+        x_grid = obs.radius * np.cos(theta_grid) + obs.x
+        y_grid = obs.radius * np.sin(theta_grid) + obs.y
+        
+        # Plot the surface
+        ax.plot_surface(x_grid, y_grid, z_grid, color='gray', alpha=0.3, rstride=1, cstride=1)
+
+    # 2. PLOT DRONE PATHS
+    colors = plt.cm.get_cmap('tab10', len(drone_ids))
+    for k in range(len(drone_ids)):
+        path = np.array(trajectory_history[k])
+        if path.size == 0: continue 
+        
+        colore_drone = colors(k)
+        # Plot the continuous trajectory line
+        ax.plot(path[:, 0], path[:, 1], path[:, 2], 
+                color=colore_drone, linewidth=2, label=f"Drone {drone_ids[k]}")
+        
+        # Start (Square) and Finish (Star)
+        ax.scatter(path[0, 0], path[0, 1], path[0, 2], color=colore_drone, marker='s', s=100)
+        ax.scatter(path[-1, 0], path[-1, 1], path[-1, 2], color=colore_drone, marker='*', s=200)
+
+    ax.set_box_aspect([1, 1, 1])
+    ax.set_title("Final Multi-UAV 3D Trajectories")
+    ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
+    plt.tight_layout()
+    plt.show(block=True)
 
 
 
