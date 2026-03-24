@@ -37,8 +37,14 @@ except:
     '''
 
 def drone_model(pos, vel, acc, dt):
+<<<<<<< HEAD
     pos_nxt= pos.reshape(3,1) + vel.reshape(3,1)*dt + 0.5*acc*(dt**2)
     vel_nxt= vel.reshape(3,1) + acc*dt
+=======
+    # Enforces strict (3, 1) column vectors using reshape for flawless, zero-cost broadcasting
+    pos_nxt = pos.reshape(3, 1) + vel.reshape(3, 1) * dt + 0.5 * acc * (dt**2)
+    vel_nxt= vel.reshape(3, 1) + acc*dt
+>>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
     acc_nxt= acc 
 
     return pos_nxt, vel_nxt
@@ -81,7 +87,6 @@ def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=
     
     return a_sample
     
-
 def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot, obs_radii):
     """
     p_i_final: array (3, N) dei waypoint finali campionati
@@ -129,11 +134,19 @@ class Drone:
 
     # Assuming drone class object with pos, vel, acc variables
     def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         N_tot= 300
         a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
 
+<<<<<<< HEAD
         # FIXED: Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
+=======
+        # Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
+>>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         if isinstance(p_fin, tuple):
             p_fin = p_fin[0]
         p_fin = np.array(p_fin)
@@ -144,13 +157,17 @@ class Drone:
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
+<<<<<<< HEAD
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
+=======
+>>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
         J= w1*C_dist + w2*C_obs
 
+<<<<<<< HEAD
         # Identify any trajectory that goes under the map (Z coordinate < 0)
         underground_mask = p_fin[2, :] < 0 
         higher_limit_mask= p_fin[2,:] > 10
@@ -161,69 +178,110 @@ class Drone:
         
         # Apply a massive cost penalty to those specific trajectories
         J[invalid_point_mask] += 1e6
+=======
+        # 1. Floor & Ceiling Penalty (Z-axis)
+        z_too_low = p_fin[2, :] < 0
+        z_too_high = p_fin[2, :] > 10.0  # Match your map height
+        
+        # 2. Map Boundary Penalty (X and Y axis)
+        # Assuming map is 0 to 50 (size of the map), adjust if different
+        out_of_bounds_x = (p_fin[0, :] < 0) | (p_fin[0, :] > 50)
+        out_of_bounds_y = (p_fin[1, :] < 0) | (p_fin[1, :] > 50)
+
+        # Apply massive cost to any trajectory that leaves the "safety box"
+        invalid_mask = z_too_low | z_too_high | out_of_bounds_x | out_of_bounds_y
+        J[invalid_mask] += 1e6
+
+        best_idx = np.argmin(J)
+        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
+>>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
 
         best_idx= np.argmin(J)
 
         return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
     
-def plot_dwa_results(p_i_t, p_i_final, J_min, J, mappa_ostacoli, best_idx, delta_J_max=1.0):
+def plot_final_trajectories(trajectory_history, obstacles, drone_ids):
     """
-    Visualizza in 3D la posizione attuale, gli ostacoli e il fascio di waypoint futuri
-    che soddisfano il criterio di costo.
+    Plots the full path for all drones and draws 3D cylinders for obstacles.
+    """
+    fig = plt.figure(figsize=(12, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=20, azim=45)
     
-    p_i_t: (3, 1) posizione attuale del drone
-    p_i_final: (3, N) tutti i waypoint finali campionati
-    J: (N,) l'array dei costi associati a ogni waypoint
-    mappa_ostacoli: (M, 3) la nuvola di punti della mappa
-    delta_J_max: float, la soglia massima di tolleranza rispetto al costo minimo
+    # 1. DRAW REAL CYLINDRICAL OBSTACLES
+    # We iterate over the original list of objects to access .height and .radius
+    for obs in obstacles:
+        # Create cylinder mesh
+        z_range = np.linspace(0, obs.height, 10)
+        theta = np.linspace(0, 2*np.pi, 20)
+        theta_grid, z_grid = np.meshgrid(theta, z_range)
+        
+        # Parametric equations for a cylinder
+        x_grid = obs.radius * np.cos(theta_grid) + obs.x
+        y_grid = obs.radius * np.sin(theta_grid) + obs.y
+        
+        # Plot the surface
+        ax.plot_surface(x_grid, y_grid, z_grid, color='gray', alpha=0.3, rstride=1, cstride=1)
+
+    # 2. PLOT DRONE PATHS
+    colors = plt.cm.get_cmap('tab10', len(drone_ids))
+    for k in range(len(drone_ids)):
+        path = np.array(trajectory_history[k])
+        if path.size == 0: continue 
+        
+        colore_drone = colors(k)
+        # Plot the continuous trajectory line
+        ax.plot(path[:, 0], path[:, 1], path[:, 2], 
+                color=colore_drone, linewidth=2, label=f"Drone {drone_ids[k]}")
+        
+        # Start (Square) and Finish (Star)
+        ax.scatter(path[0, 0], path[0, 1], path[0, 2], color=colore_drone, marker='s', s=100)
+        ax.scatter(path[-1, 0], path[-1, 1], path[-1, 2], color=colore_drone, marker='*', s=200)
+
+    ax.set_box_aspect([1, 1, 1])
+    ax.set_title("Final Multi-UAV 3D Trajectories")
+    ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
+    plt.tight_layout()
+    plt.show(block=True)
+    
+def plot_dwa_results(pos_i, waypoints, mappa_ostacoli, drone_ids):
     """
-    # 1. Setup della figura 3D
+    Visualizza in 3D la posizione attuale, gli ostacoli e il waypoint scelto per ogni drone.
+    """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_title("DWA 3D - Valutazione Waypoint")
+    ax.set_title("Multi-UAV Trajectory - Current Step")
     ax.set_xlabel("X [m]"); ax.set_ylabel("Y [m]"); ax.set_zlabel("Z [m]")
     
-    # 2. Plot degli ostacoli (Mappa Nota)
-    # Usiamo un'opacità (alpha) bassa e un colore neutro per non coprire le traiettorie
+    # Plot degli ostacoli
     ax.scatter(mappa_ostacoli[:, 0], mappa_ostacoli[:, 1], mappa_ostacoli[:, 2], 
                c='gray', alpha=0.1, s=10, label="Ostacoli")
 
-    # Creiamo una maschera booleana: True per i sample che rientrano nel delta tollerato
-    maschera_accettabili = J <= (J_min + delta_J_max)
-    
-    # Estraiamo solo i waypoint che passano il filtro
-    p_i_final_accettabili = p_i_final[:, maschera_accettabili]
-    J_accettabili = J[maschera_accettabili]
+    colors = plt.cm.get_cmap('tab10', len(drone_ids))
 
-    # 4. Plot del fascio di waypoint accettabili (Colorati in base al costo)
-    # Usiamo una colormap per far vedere la sfumatura da "molto buono" a "limite di tolleranza"
-    scatter_bundle = ax.scatter(p_i_final_accettabili[0, :], 
-                                p_i_final_accettabili[1, :], 
-                                p_i_final_accettabili[2, :], 
-                                c=J_accettabili, cmap='viridis', s=20, alpha=0.6, 
-                                label=f"Campioni (Delta J < {delta_J_max})")
-    plt.colorbar(scatter_bundle, ax=ax, label="Valore Funzione di Costo J")
+    for k in range(len(drone_ids)):
+        colore_drone = colors(k)
+        
+        # Posizione attuale (quadratino)
+        curr_p = pos_i[k].ravel()
+        ax.scatter(curr_p[0], curr_p[1], curr_p[2], 
+                   color=colore_drone, marker='s', s=80)
+        
+        # Waypoint scelto (stella)
+        next_p = waypoints[k].ravel()
+        ax.scatter(next_p[0], next_p[1], next_p[2], 
+                   color=colore_drone, marker='*', s=150, label=f"Drone {drone_ids[k]}")
 
-    # 5. Plot della posizione attuale e del Waypoint Ottimo Scelto
-    # p_i_t è (3, 1), lo "appiattiamo" con ravel() per matplotlib
-    pos_attuale = p_i_t.ravel()
-    ax.scatter(pos_attuale[0], pos_attuale[1], pos_attuale[2], 
-               c='black', marker='s', s=100, label="Posizione Attuale (p_i_t)")
-    
-    best_waypoint = p_i_final[:, best_idx]
-    ax.scatter(best_waypoint[0], best_waypoint[1], best_waypoint[2], 
-               c='red', marker='*', s=200, label="Waypoint Scelto (Ottimo)")
+        # Linea di movimento prevista per questo step
+        ax.plot([curr_p[0], next_p[0]], 
+                [curr_p[1], next_p[1]], 
+                [curr_p[2], next_p[2]], 
+                color=colore_drone, linestyle='-', linewidth=2)
 
-    # 6. (Opzionale) Disegna una linea tra la posizione attuale e l'ottimo
-    ax.plot([pos_attuale[0], best_waypoint[0]], 
-            [pos_attuale[1], best_waypoint[1]], 
-            [pos_attuale[2], best_waypoint[2]], 
-            color='red', linestyle='--', linewidth=2)
-
-    # Imposta un'inquadratura isometrica proporzionata (evita distorsioni visive)
     ax.set_box_aspect([1, 1, 1])
-    ax.legend()
-    plt.show()
+    ax.legend(loc='upper right')
+    plt.show(block=False)
+    plt.pause(0.01) # Allows the plot to update live if in a loop
 
 def plot_final_trajectories(trajectory_history, obstacles, drone_ids):
     """
