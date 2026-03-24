@@ -38,7 +38,7 @@ except:
 
 def drone_model(pos, vel, acc, dt):
     pos_nxt= pos.reshape(3,1) + vel.reshape(3,1)*dt + 0.5*acc*(dt**2)
-    vel_nxt= vel.reshape(3,1) + acc*dt
+    vel_nxt= vel[:, np.newaxis] + acc*dt
     acc_nxt= acc 
 
     return pos_nxt, vel_nxt
@@ -106,6 +106,7 @@ def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot, obs_radii)
 
     return C_obstacle
 
+
 class Drone:
 
     acc_lim= 3 # m/s^2
@@ -120,7 +121,7 @@ class Drone:
         self.a_prev= np.zeros(3)
 
     dt= 0.01 # Ts [s] (100 Hz)
-    N= 50 # timesteps
+    N= 20 # timesteps
     T_h= N*dt
     w1= 0.7 # weight for distance cost function
     w2= 1-w1 # weight for obstacles cost function
@@ -128,31 +129,34 @@ class Drone:
 
     # Assuming drone class object with pos, vel, acc variables
     def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
-        N_tot= 300
-        a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
-        p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
+        N_tot = 300
+        a_vec = sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
+        p_fin, vel_vec = drone_model(pos_i, vel_i, a_vec, T_h)
 
         # Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
         if isinstance(p_fin, tuple):
             p_fin = p_fin[0]
         p_fin = np.array(p_fin)
 
-        # FIXED: Convert ref_j from a list to a numpy array, and transpose it to align the coordinates (3, N_targets)
+        # Convert ref_j from a list to a numpy array, and transpose it to align the coordinates (3, N_targets)
         ref_j = np.array(ref_j).T
 
-        dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
-        sq_dist= np.sum(dist**2, axis=0)
-        C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-        dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
-        sq_dist= np.sum(dist**2, axis=0)
-        C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-        C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
+        # Calcolo Dispersione
+        dist = p_fin[:, :, np.newaxis] - ref_j[:, np.newaxis, :]
+        sq_dist = np.sum(dist**2, axis=0)
+        C_dist = np.sum(1.0 / (sq_dist + 1e-6), axis=1)
+        
+        # Calcolo Ostacoli
+        C_obs = compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
-        J= w1*C_dist + w2*C_obs
+        J = w1 * C_dist + w2 * C_obs
 
         # 1. Floor & Ceiling Penalty (Z-axis)
         z_too_low = p_fin[2, :] < 0
         z_too_high = p_fin[2, :] > 10.0  # Match your map height
+        
+        speed_fin = np.linalg.norm(vel_vec, axis=0)
+        too_fast= speed_fin > Drone.vel_lim
         
         # 2. Map Boundary Penalty (X and Y axis)
         # Assuming map is 0 to 50 (size of the map), adjust if different
@@ -160,15 +164,31 @@ class Drone:
         out_of_bounds_y = (p_fin[1, :] < 0) | (p_fin[1, :] > 50)
 
         # Apply massive cost to any trajectory that leaves the "safety box"
-        invalid_mask = z_too_low | z_too_high | out_of_bounds_x | out_of_bounds_y
+        invalid_mask = z_too_low | z_too_high | out_of_bounds_x | out_of_bounds_y | too_fast
         J[invalid_mask] += 1e6
 
-        best_idx = np.argmin(J)
-        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
+        J_min = np.min(J)
 
-        best_idx= np.argmin(J)
+        if J_min >= 1e6:
+            # EMERGENZA: Tutti i campioni portano a una collisione o fuori mappa.
+            # L'azione ottimale non è scegliere il meno peggio, ma FRENARE.
+            best_idx = 0 # Irrilevante
+            
+            # FIXED: Usiamo i parametri della funzione (T_h, acc_lim) invece di Drone.T_h
+            a_opt = -vel_i / T_h 
+            a_opt = np.clip(a_opt, -acc_lim, acc_lim)
+            p_opt = pos_i + vel_i * T_h + 0.5 * a_opt * (T_h**2)
+        else:
+            # Comportamento normale
+            best_idx = np.argmin(J)
+            
+            # FIXED: Usiamo i nomi corretti degli array generati all'inizio della funzione
+            a_opt = a_vec[:, best_idx] 
+            p_opt = p_fin[:, best_idx] 
 
-        return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
+        # FIXED: Restituiamo le variabili ottime appena calcolate (p_opt, a_opt) 
+        # invece di indicizzare p_fin due volte, che causerebbe un IndexError
+        return p_opt, a_opt, J_min, best_idx
     
 def plot_final_trajectories(trajectory_history, obstacles, drone_ids):
     """

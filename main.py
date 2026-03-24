@@ -21,11 +21,11 @@ import matplotlib
 matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 import numpy as np
-# ... rest of your imports
+
 
 # MODIFY THIS AT THE START !
 reload_map= True
-# size of the map sizexsize
+# size of the map size x size
 size = 50  
 
 if reload_map == False:
@@ -115,9 +115,9 @@ obs_tree = KDTree(obstacle_coords)
 drone_starts = [np.array([start[0], start[1], 0.0]) for start in drone_starts]
 
 # Problem initialization
-safe_radius = 0.5 
+safe_radius = 0.3
 N_tot = 300
-num_iter = 1000 
+num_iter = 30
 iter_count = 0
 
 # Convert physical states to lists so EVERY drone has its own independent history
@@ -188,6 +188,8 @@ while iter_count <= num_iter:
         trajectory_history[i].append(np.array(waypoints[i]))
 
     iter_count += 1
+    if (iter_count%10 == 0):
+        print(J_min_vec)
     
     # Optional: Break the loop early if all drones have reached their centroids
     # (You would need to define a distance threshold check here)
