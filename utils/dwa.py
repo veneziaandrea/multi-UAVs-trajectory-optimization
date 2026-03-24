@@ -37,14 +37,8 @@ except:
     '''
 
 def drone_model(pos, vel, acc, dt):
-<<<<<<< HEAD
     pos_nxt= pos.reshape(3,1) + vel.reshape(3,1)*dt + 0.5*acc*(dt**2)
     vel_nxt= vel.reshape(3,1) + acc*dt
-=======
-    # Enforces strict (3, 1) column vectors using reshape for flawless, zero-cost broadcasting
-    pos_nxt = pos.reshape(3, 1) + vel.reshape(3, 1) * dt + 0.5 * acc * (dt**2)
-    vel_nxt= vel.reshape(3, 1) + acc*dt
->>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
     acc_nxt= acc 
 
     return pos_nxt, vel_nxt
@@ -134,19 +128,11 @@ class Drone:
 
     # Assuming drone class object with pos, vel, acc variables
     def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
-<<<<<<< HEAD
-=======
-
->>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         N_tot= 300
         a_vec= sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin= drone_model(pos_i, vel_i, a_vec, T_h)
 
-<<<<<<< HEAD
-        # FIXED: Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
-=======
         # Ensure p_fin is an array (and grab the first element if drone_model returned a tuple)
->>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         if isinstance(p_fin, tuple):
             p_fin = p_fin[0]
         p_fin = np.array(p_fin)
@@ -157,28 +143,13 @@ class Drone:
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-<<<<<<< HEAD
         dist= p_fin[:,:,np.newaxis] - ref_j[:, np.newaxis, :]
         sq_dist= np.sum(dist**2, axis=0)
         C_dist= np.sum(1.0 / (sq_dist+ 1e-6), axis=1)
-=======
->>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
         C_obs= compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
         J= w1*C_dist + w2*C_obs
 
-<<<<<<< HEAD
-        # Identify any trajectory that goes under the map (Z coordinate < 0)
-        underground_mask = p_fin[2, :] < 0 
-        higher_limit_mask= p_fin[2,:] > 10
-        size_x_map_mask= p_fin[0, :] > 50
-        size_y_map_mask= p_fin[1,:] > 50
-
-        invalid_point_mask = underground_mask | higher_limit_mask | size_x_map_mask | size_y_map_mask
-        
-        # Apply a massive cost penalty to those specific trajectories
-        J[invalid_point_mask] += 1e6
-=======
         # 1. Floor & Ceiling Penalty (Z-axis)
         z_too_low = p_fin[2, :] < 0
         z_too_high = p_fin[2, :] > 10.0  # Match your map height
@@ -194,7 +165,6 @@ class Drone:
 
         best_idx = np.argmin(J)
         return p_fin[:, best_idx], a_vec[:, best_idx], J[best_idx], best_idx
->>>>>>> 7cca7d31dbcb5bbbd18615dfbf27213639672999
 
         best_idx= np.argmin(J)
 

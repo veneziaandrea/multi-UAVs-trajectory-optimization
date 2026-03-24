@@ -4,8 +4,6 @@ from utils.mapgen_v2 import map_and_grid_visualization
 #from utils.mapgen_v2 import generate_occupancy_grid
 from utils.kmeans import kmeans_clustering
 from utils.save_map import save_map
-from utils.dwa import sample_acc
-from utils.dwa import compute_obstacles_cost
 from utils.dwa import plot_final_trajectories
 from utils.dwa import Drone
 
