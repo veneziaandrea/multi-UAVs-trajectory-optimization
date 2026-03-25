@@ -43,7 +43,7 @@ def drone_model(pos, vel, acc, dt):
 
     return pos_nxt, vel_nxt
 
-def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.3, sigma=0.3):
+def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.5, sigma=0.3):
 
     """
     Generate the acceleration samples matrix(3, N_tot) 
@@ -101,7 +101,7 @@ def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot, obs_radii)
     C_obstacle = np.zeros(N_tot)
     in_collision = true_dist <= safety_radius
     safe = true_dist > safety_radius
-    C_obstacle[in_collision] = 1e6
+    C_obstacle[in_collision] += 1e6
     C_obstacle[safe] = 1.0 / (true_dist[safe] - safety_radius + 1e-6)
 
     return C_obstacle
@@ -112,7 +112,6 @@ def compute_z_cost(z_ref, p_i_final):
     C_zref= ref_error**2
 
     return C_zref
-
 
 class Drone:
 
@@ -177,29 +176,17 @@ class Drone:
 
         # Apply massive cost to any trajectory that leaves the "safety box"
         invalid_mask = z_too_low | z_too_high | out_of_bounds_x | out_of_bounds_y | too_fast
-        J[invalid_mask] += 1e6
+        J[invalid_mask] += 1e9
 
         J_min = np.min(J)
 
-        if J_min >= 1e6:
-            # EMERGENZA: Tutti i campioni portano a una collisione o fuori mappa.
-            # L'azione ottimale non è scegliere il meno peggio, ma FRENARE.
-            best_idx = 0 # Irrilevante
-            
-            # FIXED: Usiamo i parametri della funzione (T_h, acc_lim) invece di Drone.T_h
-            a_opt = -vel_i / T_h 
-            a_opt = np.clip(a_opt, -acc_lim, acc_lim)
-            p_opt = pos_i + vel_i * T_h + 0.5 * a_opt * (T_h**2)
-        else:
-            # Comportamento normale
-            best_idx = np.argmin(J)
-            
-            # FIXED: Usiamo i nomi corretti degli array generati all'inizio della funzione
-            a_opt = a_vec[:, best_idx] 
-            p_opt = p_fin[:, best_idx] 
+        best_idx = np.argmin(J)
+        
+        # Usiamo i nomi corretti degli array generati all'inizio della funzione
+        a_opt = a_vec[:, best_idx] 
+        p_opt = p_fin[:, best_idx] 
 
-        # FIXED: Restituiamo le variabili ottime appena calcolate (p_opt, a_opt) 
-        # invece di indicizzare p_fin due volte, che causerebbe un IndexError
+        # Restituiamo le variabili ottime appena calcolate (p_opt, a_opt) 
         return p_opt, a_opt, J_min, best_idx
     
 def plot_final_trajectories(trajectory_history, obstacles, drone_ids):

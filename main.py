@@ -117,7 +117,7 @@ drone_starts = [np.array([start[0], start[1], 0.0]) for start in drone_starts]
 # Problem initialization
 safe_radius = 0.3
 N_tot = 300
-num_iter = 50
+num_iter = 30
 iter_count = 0
 zref= np.ones(N_tot)*7.5
 
