@@ -43,7 +43,7 @@ def drone_model(pos, vel, acc, dt):
 
     return pos_nxt, vel_nxt
 
-def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.7, sigma=0.3):
+def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.3, sigma=0.3):
 
     """
     Generate the acceleration samples matrix(3, N_tot) 
@@ -106,6 +106,13 @@ def compute_obstacles_cost (p_i_final, kd_tree, safety_radius, N_tot, obs_radii)
 
     return C_obstacle
 
+def compute_z_cost(z_ref, p_i_final):
+    
+    ref_error= z_ref - p_i_final[2, :]
+    C_zref= ref_error**2
+
+    return C_zref
+
 
 class Drone:
 
@@ -125,10 +132,10 @@ class Drone:
     T_h= N*dt
     w1= 0.7 # weight for distance cost function
     w2= 1-w1 # weight for obstacles cost function
+    w3= 10 # weight for height refernce cost function
     safe_rad= 0.3 # safe distance from obstacles [m]
 
-    # Assuming drone class object with pos, vel, acc variables
-    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, obs_tree, safe_rad, obs_radii):
+    def DWA(self, pos_i, vel_i, ref_j, a_prev, acc_lim, T_h, w1, w2, w3, obs_tree, safe_rad, obs_radii, zref):
         N_tot = 300
         a_vec = sample_acc(a_prev, -acc_lim, acc_lim, N_tot, ratio_warm=0.75, sigma=0.3)
         p_fin, vel_vec = drone_model(pos_i, vel_i, a_vec, T_h)
@@ -142,18 +149,23 @@ class Drone:
         ref_j = np.array(ref_j).T
 
         # Calcolo Dispersione
-        dist = p_fin[:, :, np.newaxis] - ref_j[:, np.newaxis, :]
+        # FIXED: Sliced [:2] for X,Y only, and restored np.newaxis to broadcast 300 paths against N targets
+        # Calculate X, Y distance to all targets
+        dist = p_fin[:2, :, np.newaxis] - ref_j[:2, np.newaxis, :]
         sq_dist = np.sum(dist**2, axis=0)
+        
+        # Added np.sum(..., axis=1) to squash the (300, 5) matrix down to a flat (300,) array
         C_dist = np.sum(1.0 / (sq_dist + 1e-6), axis=1)
         
         # Calcolo Ostacoli
         C_obs = compute_obstacles_cost(p_fin, obs_tree, safe_rad, N_tot, obs_radii)
 
-        J = w1 * C_dist + w2 * C_obs
+        C_zref= compute_z_cost(zref, p_fin)
+        J = w1 * C_dist + w2 * C_obs + w3 * C_zref
 
         # 1. Floor & Ceiling Penalty (Z-axis)
         z_too_low = p_fin[2, :] < 0
-        z_too_high = p_fin[2, :] > 10.0  # Match your map height
+        z_too_high = p_fin[2, :] > 10.0  # Match map height
         
         speed_fin = np.linalg.norm(vel_vec, axis=0)
         too_fast= speed_fin > Drone.vel_lim

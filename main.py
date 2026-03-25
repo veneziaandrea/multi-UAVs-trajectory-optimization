@@ -18,7 +18,7 @@ from partition.voronoi import voronoi_partition, plot_voronoi
 
 import numpy as np
 import matplotlib
-matplotlib.use('TkAgg') 
+matplotlib.use('TkAgg') # to allow plots on linux
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -117,8 +117,9 @@ drone_starts = [np.array([start[0], start[1], 0.0]) for start in drone_starts]
 # Problem initialization
 safe_radius = 0.3
 N_tot = 300
-num_iter = 30
+num_iter = 50
 iter_count = 0
+zref= np.ones(N_tot)*7.5
 
 # Convert physical states to lists so EVERY drone has its own independent history
 pos_i = list(drone_starts) 
@@ -166,10 +167,12 @@ while iter_count <= num_iter:
             Drone.acc_lim, 
             Drone.T_h, 
             Drone.w1, 
-            Drone.w2, 
+            Drone.w2,
+            Drone.w3,  
             obs_tree, 
             safe_radius, 
-            obs_radii
+            obs_radii,
+            zref
         )
     
     # 2. Execution / Kinematic Update Phase
