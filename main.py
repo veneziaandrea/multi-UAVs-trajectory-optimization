@@ -1,11 +1,11 @@
 # Map generation and visualization
-from utils.map_generation import generate_drone_map
-from utils.map_generation import map_and_grid_visualization
-from utils.map_generation import generate_occupancy_grid
-from utils.kmeans import kmeans_clustering
+from src.environment.map_generation import generate_drone_map
+from src.environment.map_generation import map_and_grid_visualization
+from src.environment.map_generation import generate_occupancy_grid
+from src.utils.kmeans import kmeans_clustering
 
 # Voronoi partitioning and visualization
-from partition.voronoi import voronoi_partition, plot_voronoi
+from src.partition.voronoi import voronoi_partition, plot_voronoi
 
 import numpy as np
 import matplotlib.pyplot as plt
