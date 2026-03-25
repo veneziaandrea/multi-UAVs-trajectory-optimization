@@ -43,7 +43,7 @@ def drone_model(pos, vel, acc, dt):
 
     return pos_nxt, vel_nxt
 
-def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.5, sigma=0.3):
+def sample_acc(a_previous, a_dw_min, a_dw_max, N_tot=300, ratio_warm=0.5, sigma=0.5):
 
     """
     Generate the acceleration samples matrix(3, N_tot) 

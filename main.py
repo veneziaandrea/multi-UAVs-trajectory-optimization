@@ -97,7 +97,7 @@ vor, voronoi_cells = voronoi_partition(centroids, size)
 plot_voronoi(vor, drone_starts, size)
 
 # -------------------------------------------------------------------------------------------------------
-# REGION ASSIGNEMENT TO BE DONE (BUT COULD WORK WITHOUT MAYBE)
+# REGION ASSIGNEMENT TO BE DONE 
 
 # ---------------------------------------------------------------------------------------------------------
 # DWA WAYPOINT GENERATION
