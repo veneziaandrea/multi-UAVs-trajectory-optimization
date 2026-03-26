@@ -1,6 +1,7 @@
 {
+    "seed": 7,
     "map": {
-        "x_bounds": [0.0, 40.0],
+        "x_bounds": [0.0, 40.0],                
         "y_bounds": [0.0, 40.0],
         "z_bounds": [0.0, 20.0],
         "num_obstacles": 20,
@@ -11,6 +12,8 @@
     "uav": {
         "num_uavs": 5,
         "max_speed": 5.0,
-        "max_acceleration": 2.0
+        "max_acceleration": 2.0,
+        "altitude": 0.0,
+        "start_separation": 1.5
     }
 }
