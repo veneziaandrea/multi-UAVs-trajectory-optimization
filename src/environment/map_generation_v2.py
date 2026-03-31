@@ -1,8 +1,6 @@
 import numpy as np
-
-from utils.geometry import create_rectangle
 from shapely.geometry import Point, Polygon
-from dataclasses import dataclass   
+from shapely.ops import unary_union
 
 class Obstacle: 
     '''Cylindrical obstacle in 3D space'''
@@ -28,8 +26,21 @@ class Map3D:
         self.obstacles = obstacles
 
         # geometric representation
-        self.workspace = create_rectangle(x_bounds[0], x_bounds[1], y_bounds[0], y_bounds[1])
-
+        self.workspace = np.array(
+            [
+                [x_bounds[0], y_bounds[0]],
+                [x_bounds[1], y_bounds[0]],
+                [x_bounds[1], y_bounds[1]],
+                [x_bounds[0], y_bounds[1]],
+            ],
+            dtype=float,
+        )
+        self.workspace_polygon = Polygon(self.workspace)
+        self.obstacle_union = unary_union([obstacle.shape for obstacle in obstacles]) if obstacles else None
+        if self.obstacle_union is None or self.obstacle_union.is_empty:
+            self.free_space = self.workspace_polygon
+        else:
+            self.free_space = self.workspace_polygon.difference(self.obstacle_union)
     @classmethod
     def generate_map3D(
         cls,

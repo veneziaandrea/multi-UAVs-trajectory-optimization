@@ -1,33 +1,111 @@
-# code to obtain the centroids of the clusters of the free space, to be used as starting points for the 
-# voronoi partitioning instead of the drone starting positions, in case the initial position of the drones is 
-# fixed and not optimal for the partitioning. 
+# code to obtain the centroids of the clusters of the free space, to be used as starting points for the
+# voronoi partitioning instead of the drone starting positions, in case the initial position of the drones is
+# fixed and not optimal for the partitioning.
 
 import numpy as np
-from sklearn.cluster import KMeans
 from shapely.geometry import Point
 
 
-def kmeans_clustering(free_space, num_drones):
-    ''' Perform K-means clustering on the free space to find optimal starting points for Voronoi partitioning.
-        Parameters:
-        - free_space: Shapely Polygon representing the free space in the map    
-        - num_drones: Number of drones (clusters) to generate
-        Returns:
-        - centroids: List of (x, y) coordinates representing the centroids of the clusters
-    '''
-    # Sample points from the free space polygon
+def _sample_free_space_points(free_space, num_samples, rng):
+    """Sample random 2D points inside the free-space geometry."""
     minx, miny, maxx, maxy = free_space.bounds
-    points = []
-    while len(points) < 1000:  # Sample 1000 points for clustering
-        x = np.random.uniform(minx, maxx)
-        y = np.random.uniform(miny, maxy)
-        point = Point(x, y)
-        if free_space.contains(point):
-            points.append([x, y])
-    points = np.array(points)       
-    # Perform K-means clustering
-    kmeans = KMeans(n_clusters=num_drones, random_state=0).fit(points)
-    centroids = kmeans.cluster_centers_
+    accepted_points = []
+    attempts = 0
+    max_attempts = max(num_samples * 50, 5000)
+
+    while len(accepted_points) < num_samples and attempts < max_attempts:
+        remaining = num_samples - len(accepted_points)
+        batch_size = min(max(remaining * 2, 128), 2048)
+        samples = rng.uniform([minx, miny], [maxx, maxy], size=(batch_size, 2))
+
+        for sample in samples:
+            attempts += 1
+            if free_space.covers(Point(float(sample[0]), float(sample[1]))):
+                accepted_points.append(sample)
+                if len(accepted_points) >= num_samples:
+                    break
+            if attempts >= max_attempts:
+                break
+
+    if len(accepted_points) < num_samples:
+        raise ValueError("Unable to sample enough points from the free space for k-means initialization.")
+
+    return np.asarray(accepted_points, dtype=float)
+
+
+def _initialize_centroids_kmeans_pp(points, num_clusters, rng):
+    """Initialize centroids with a k-means++ style seeding."""
+    first_index = int(rng.integers(0, len(points)))
+    centroids = [points[first_index]]
+
+    while len(centroids) < num_clusters:
+        centroid_array = np.asarray(centroids, dtype=float)
+        squared_distances = np.sum((points[:, None, :] - centroid_array[None, :, :]) ** 2, axis=2)
+        min_squared_distances = np.min(squared_distances, axis=1)
+        total_distance = float(np.sum(min_squared_distances))
+
+        if total_distance <= 0.0:
+            fallback_index = int(rng.integers(0, len(points)))
+            centroids.append(points[fallback_index])
+            continue
+
+        probabilities = min_squared_distances / total_distance
+        next_index = int(rng.choice(len(points), p=probabilities))
+        centroids.append(points[next_index])
+
+    return np.asarray(centroids, dtype=float)
+
+
+def kmeans_clustering(free_space, num_drones, *, seed=None, num_samples=2000, max_iter=100):
+    """Find Voronoi seeds by clustering random samples drawn from the map free space."""
+    if num_drones <= 0:
+        raise ValueError("num_drones must be positive.")
+
+    rng = np.random.default_rng(seed)
+    points = _sample_free_space_points(free_space, num_samples=num_samples, rng=rng)
+
+    if len(points) < num_drones:
+        raise ValueError("Not enough free-space samples to initialize all k-means centroids.")
+
+    centroids = _initialize_centroids_kmeans_pp(points, num_drones, rng)
+    labels = np.zeros(len(points), dtype=int)
+
+    for _ in range(max_iter):
+        squared_distances = np.sum((points[:, None, :] - centroids[None, :, :]) ** 2, axis=2)
+        new_labels = np.argmin(squared_distances, axis=1)
+        new_centroids = np.array(centroids, copy=True)
+
+        for cluster_index in range(num_drones):
+            cluster_points = points[new_labels == cluster_index]
+            if len(cluster_points) == 0:
+                farthest_point_index = int(np.argmax(np.min(squared_distances, axis=1)))
+                new_centroids[cluster_index] = points[farthest_point_index]
+                continue
+            new_centroids[cluster_index] = np.mean(cluster_points, axis=0)
+            if not free_space.covers(Point(*new_centroids[cluster_index])):
+                nearest_index = int(
+                    np.argmin(np.sum((cluster_points - new_centroids[cluster_index]) ** 2, axis=1))
+                )
+                new_centroids[cluster_index] = cluster_points[nearest_index]
+
+        if np.allclose(new_centroids, centroids):
+            labels = new_labels
+            centroids = new_centroids
+            break
+
+        labels = new_labels
+        centroids = new_centroids
+
+    # Final snap to sampled free-space points guarantees valid seeds even on non-convex free regions.
+    for cluster_index in range(num_drones):
+        if free_space.covers(Point(*centroids[cluster_index])):
+            continue
+
+        cluster_points = points[labels == cluster_index]
+        candidate_points = cluster_points if len(cluster_points) > 0 else points
+        nearest_index = int(np.argmin(np.sum((candidate_points - centroids[cluster_index]) ** 2, axis=1)))
+        centroids[cluster_index] = candidate_points[nearest_index]
+
     return centroids
 
 
