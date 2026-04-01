@@ -5,158 +5,163 @@ import casadi as ca
 import numpy as np
 from scipy.spatial import KDTree
 
-# FIRST ATTEMPT: KEEP IT AS A QP BY LINEARIZING THE DISTANCE FROM OBSTACLES/OTHER DRONES CONSTRAINT
-def MPC_QP (waypoints, obs_tree): 
-
-    # Set the root directory and add the source directory to the Python path
+def setup_MPC_QP(waypoints, num_neighbors): 
+    """
+    Initializes the CasADi Opti stack. Run this ONCE at the start.
+    """
     ROOT = Path(__file__).resolve().parent
     SRC = ROOT / "src"
     if str(SRC) not in sys.path:
         sys.path.insert(0, str(SRC))
     config_path = ROOT / "configs" / "optimization.json"
+    
+    # Load configuration
     config = load_config(config_path)
 
-    # unpack the variables of interest from the json file
+    # Unpack variables from config
     cost_cfg = config["cost"]
     constraints_cfg = config["constraints"]
     mpc_cfg = config["mpc"]
 
-    # cost function parameters
+    # Cost function weights
     w_seen = cost_cfg["w_seen"]
     w_effort = cost_cfg["w_effort"]
-    z_ref = cost_cfg["z_ref"]
 
-    # bounds on acceleration, speed, obstacle avoidance
+    # Physical constraints
     max_vel = constraints_cfg["max_speed"]
     max_acc = constraints_cfg["max_acceleration"]
-    safe_rad = constraints_cfg["safe_distance"] # safety distance from obstacles
+    safe_rad = constraints_cfg["safe_distance"] 
 
-    # mpc problem parameters
+    # MPC parameters
     N = mpc_cfg["prediction_horizon"]
-    dt = mpc_cfg["config"]
-    num_regions = waypoints.size(axis = 0) # one region big as FOV per waypoint
+    dt = mpc_cfg["dt"]
+    num_regions = waypoints.shape[0] 
 
-    # OPTIMIZATION PROBLEM START
     opti = ca.Opti()
 
-    # --- Optimization variables ---
-    p = opti.variable(3, N+1)  
-    v = opti.variable(3, N+1)  
-    B = opti.variable(1, N+1)  
-    a = opti.variable(3, N) # input  
+    # --- Optimization Variables ---
+    p = opti.variable(3, N+1)  # Position
+    v = opti.variable(3, N+1)  # Velocity
+    B = opti.variable(1, N+1)  # Battery state
+    a = opti.variable(3, N)    # Acceleration input
 
-    # --- Parameters (Updated each iteration of the MPC) ---
-    # "warm start" or update of initial position
+    # --- Parameters (Updated at each MPC iteration) ---
     p_init = opti.parameter(3) 
     v_init = opti.parameter(3)
     B_init = opti.parameter(1)
-    p_obs_closest= opti.parameter(3, N+1)
+    
+    # Closest obstacles for each step of the horizon
+    p_obs_closest = opti.parameter(3, N+1)
+    # Predicted trajectories of neighboring drones (3D, Horizon, Neighbor ID)
+    p_neighbors = opti.parameter(3, N+1, num_neighbors) 
 
-    # Flags and waypoints 
+    # Target waypoints and their active/inactive flags
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
 
-    # Collision constraints linearization
-    # p_obs will be the closest obstacle at the end of the prediction horizon
-
-    # Ego drone's planned trajectory from the previous MPC step
-    # We need this to evaluate the Taylor expansion at a known point
+    # Previous solution used for Taylor expansion (linearization)
     p_ego_prev = opti.parameter(3, N+1)
 
-    # --- Cost function computation ---
+    # --- Cost Function ---
     cost = 0
 
-    # cost to visit every waypoint
+    # Task cost: Reach waypoints (if flag is 0)
     for i in range(num_regions):
-        # Penalize the distance from the postion at the end of predicition horizon (p[:, N]) and the waypoint
+        # Minimize distance between the end of horizon and the waypoint
         cost += (1 - flag[i]) * ca.sumsqr(p[:, N] - p_wp[:, i]) * w_seen
 
-    # cost to reduce the control effort
+    # Control effort cost: Reduce acceleration magnitude
     for k in range(N):
         cost += w_effort * ca.sumsqr(a[:, k])
         
     opti.minimize(cost)
 
-    # --- Dynamics Constraints ---
+    # --- Dynamics Constraints (Multiple Shooting) ---
     opti.subject_to(p[:, 0] == p_init)
     opti.subject_to(v[:, 0] == v_init)
     opti.subject_to(B[:, 0] == B_init)
 
-    # Multiple Shooting
     for k in range(N):
-        # simple basic drone model
+        # Kinematic model
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt)
         opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
         
-        # battery evolution model (simple first try)
-        c_batt = 0.01
-        opti.subject_to(B[:, k+1] == B[:, k] - c_batt * ca.sumsqr(a[:, k]) * dt)
+        # NOTE: Battery dynamics B[k+1] = B[k] - c*||a||^2 is non-linear.
+        # To keep this as a QP for OSQP/QRQP, we treat Battery as a simple 
+        # state bound here. You can calculate the drop after solving.
 
-    # --- Physical bounds ---
+    # --- Physical Bounds ---
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
-    opti.subject_to(opti.bounded(0, B, 100)) # Battery can't go < 0%
+    opti.subject_to(opti.bounded(0, B, 100)) 
 
-    # --- Obstacles and Collisions avoidance ---
+    # --- Linearized Obstacle Avoidance ---
     for k in range(N+1):
-        # Vector from the closest obstacle at step k to the nominal position at step k
         dp_bar = p_ego_prev[:, k] - p_obs_closest[:, k]
-        
         dist_bar_sqr = ca.sumsqr(dp_bar)
-        
+        # First-order Taylor expansion around p_ego_prev
         linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
-        
         opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
+    
+    # --- Linearized Neighbor Collision Avoidance ---
+    for k in range(N+1):
+        for j in range(num_neighbors):
+            dp_bar = p_ego_prev[:, k] - p_neighbors[:, k, j]
+            dist_bar_sqr = ca.sumsqr(dp_bar)
+            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
 
-    # --- Inizialization ---
-    # Initial conditions
-    opti.subject_to(p[:, 0] == [0, 0, 0])
-    opti.subject_to(v[:, 0] == [0, 0, 0])
-    opti.subject_to(B[:, 0] == 100)
+    # --- Solver Choice ---
+    # Using 'osqp' for QP or 'ipopt' for NLP
+    # 'expand': True speeds up the solver by evaluating the graph once
+    opti.solver("osqp", {"expand": True})
 
-    # solver choice
-    # 'ipopt' for NLP;  'qrqp' or 'osqp' for QP 
-    p_opts = {"expand": True}
-    s_opts = {"max_iter": 100}
-    opti.solver("osqp", p_opts, s_opts)
+    # Return a dictionary containing the symbolic objects to be used in the loop
+    return {
+        "opti": opti, "p": p, "a": a, "p_init": p_init, 
+        "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
+        "flag": flag, "p_ego_prev": p_ego_prev, 
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors
+    }
 
-    # update closest obstacles and else
-    # Assume 'tree' is your pre-built scipy.spatial.KDTree of all map obstacles
+def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords, 
+                      last_traj, neighbor_trajs, obs_tree):
+    """
+    Executes one step of the MPC. Call this inside your main loop.
+    """
+    opti = mpc_vars["opti"]
+    
+    # 1. Query KDTree for closest obstacles along the previous trajectory
+    # Transpose last_traj to match (N_points, 3) for KDTree
+    distances, indices = obs_tree.query(np.array(last_traj).T)
+    closest_obs_coords = obs_tree.data[indices].T 
 
-    # 1. Query the KDTree for all N+1 points along the predicted trajectory
-    # KDTree expects shape (num_points, dimensions), so we transpose (.T)
-    distances, indices = obs_tree.query(prev_solution_p.T)
-
-    # 2. Extract the physical coordinates of those closest obstacles
-    # Map the indices back to the original obstacle dataset
-    # Resulting shape must match CasADi parameter: 3x(N+1)
-    closest_obstacles_numeric = obs_tree.data[indices].T 
-
-    # 3. Update CasADi Parameters
-    opti.set_value(p_init, current_p)
-    opti.set_value(flag, local_flags)
-    opti.set_value(p_ego_prev, prev_solution_p)
-
-    # INJECT THE KDTree RESULTS HERE:
-    opti.set_value(p_obs_closest, closest_obstacles_numeric)
+    # 2. Update CasADi parameters with current numerical values
+    opti.set_value(mpc_vars["p_init"], current_state["p"])
+    opti.set_value(mpc_vars["v_init"], current_state["v"])
+    opti.set_value(mpc_vars["B_init"], current_state["B"])
+    opti.set_value(mpc_vars["flag"], local_flags)
+    opti.set_value(mpc_vars["p_wp"], waypoint_coords.T)
+    opti.set_value(mpc_vars["p_ego_prev"], last_traj)
+    opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
+    opti.set_value(mpc_vars["p_neighbors"], neighbor_trajs)
 
     try:
-        # Run the optimization
+        # Solve the QP
         sol = opti.solve()
         
-        # 5. Save the new trajectory for the next iteration's KDTree query and linearization
-        prev_solution_p = sol.value(p) 
-        # Retrieve the exact wall-clock time spent inside the solver
+        # Extract numerical results
+        new_trajectory = sol.value(mpc_vars["p"])
+        optimal_accel = sol.value(mpc_vars["a"])
+        
+        # Performance profiling
         solve_time = sol.stats()['t_wall_total']
+        print(f"MPC solve successful: {solve_time:.4f}s")
         
-        print(f"Optimal solution found in: {solve_time:.4f} seconds")
-        
-        # Apply optimal control
-        a_opt = sol.value(a)
+        return optimal_accel[:, 0], new_trajectory
 
     except RuntimeError:
-        print("Solver failed to find a solution!")
-        # You can still inspect the stats even if it fails by querying the opti object directly
-        fail_time = opti.debug.stats()['t_wall_total']
-        print(f"Failed after: {fail_time:.4f} seconds")
-
+        print("MPC solve failed! Using safety fallback.")
+        # Debugging: check the state of the solver at failure
+        # return_zero_accel, keep_old_trajectory
+        return np.array([0.0, 0.0, 0.0]), last_traj
