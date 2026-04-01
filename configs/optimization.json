@@ -8,5 +8,9 @@
         "max_speed": 10.0,
         "max_acceleration": 3.0,
         "safe_distance": 0.5
+    },
+    "mpc": {
+        "prediction_horizon": 20,
+        "timestep": 0.05
     }
 }
