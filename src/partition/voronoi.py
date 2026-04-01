@@ -2,6 +2,7 @@ import numpy as np
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from scipy.optimize import linear_sum_assignment
 
 # Ensure that src is on sys.path even when running this module directly
 SRC_DIR = Path(__file__).resolve().parent.parent
@@ -49,6 +50,25 @@ def clip_polygon_with_half_plane(
         return np.empty((0, 2), dtype=float)
 
     return np.asarray(clipped, dtype=float)
+
+def assign_area(vor_partition, drone_positions):
+    cell_items = list(vor_partition.Voronoi_Cells.items())
+    seeds = np.array([cell.seed for _, cell in cell_items])
+    
+    # Matrice dei costi (distanze al quadrato)
+    dist_matrix = np.sum((seeds[:, np.newaxis, :] - drone_positions[np.newaxis, :, :])**2, axis=2)
+    
+    # Risolve il problema dell'assegnazione ottima (Minimizza distanza totale)
+    # Garantisce 1 drone -> 1 cella senza duplicati
+    cell_indices, drone_indices = linear_sum_assignment(dist_matrix)
+    
+    new_cells = {}
+    for c_idx, d_idx in zip(cell_indices, drone_indices):
+        cell = cell_items[c_idx][1]
+        cell.drone_id = int(d_idx)
+        new_cells[cell.drone_id] = cell
+        
+    vor_partition.Voronoi_Cells = new_cells
 
 @dataclass
 class Voronoi_Cell: 

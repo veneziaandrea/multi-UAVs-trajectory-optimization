@@ -2,8 +2,7 @@ import numpy as np
 import sys
 from pathlib import Path
 import math
-
-#Prova
+from scipy.spatial import KDTree
 
 # Set the root directory and add the source directory to the Python path
 ROOT = Path(__file__).resolve().parent
@@ -16,7 +15,7 @@ from environment.map_generation_v2 import Map3D
 from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
-from partition.voronoi import Voronoi_Partition
+from partition.voronoi import Voronoi_Partition, assign_area
 
 def build_demo(config): 
     # Load environment configuration
@@ -107,3 +106,14 @@ if __name__ == "__main__":
         title="Voronoi Partition of the Workspace",
     )
 
+    assign_area(vor, drone_positions)
+    print(f'Aree assegnate: {vor.Voronoi_Cells}')
+
+    # Extract 3D coordinates (x, y, and half the height for the z-center)
+    obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
+    # Create an array of radii to match the order of the tree
+    obs_radii = np.array([obs.radius for obs in map3d.obstacles])
+    # Create obstacles object in a way that is actually fast to use 
+    obs_tree = KDTree(obstacle_coords)
+
+    
