@@ -88,8 +88,8 @@ def setup_MPC_QP(waypoints, num_neighbors):
         
         # NOTE: Battery dynamics B[k+1] = B[k] - c*||a||^2 is non-linear.
         # To keep this as a QP for OSQP/QRQP, we treat Battery as a simple 
-        # state bound here. You can calculate the drop after solving.
-
+        # state bound here. Calculate the drop after solving. 
+    
     # --- Physical Bounds ---
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
@@ -116,27 +116,28 @@ def setup_MPC_QP(waypoints, num_neighbors):
     # 'expand': True speeds up the solver by evaluating the graph once
     opti.solver("osqp", {"expand": True})
 
+    # variables for plots
+    history_p = []
+    history_predictions = []
     # Return a dictionary containing the symbolic objects to be used in the loop
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
-        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors, 
+        "history_points": history_p, "history_predictions": history_predictions
     }
 
+# --- In run_mpc_iteration ---
 def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords, 
                       last_traj, neighbor_trajs, obs_tree):
-    """
-    Executes one step of the MPC. Call this inside your main loop.
-    """
     opti = mpc_vars["opti"]
     
-    # 1. Query KDTree for closest obstacles along the previous trajectory
-    # Transpose last_traj to match (N_points, 3) for KDTree
+    # 1. Query KDTree using the PREVIOUS trajectory guess
     distances, indices = obs_tree.query(np.array(last_traj).T)
     closest_obs_coords = obs_tree.data[indices].T 
 
-    # 2. Update CasADi parameters with current numerical values
+    # 2. Inject numerical values into the CasADi parameters
     opti.set_value(mpc_vars["p_init"], current_state["p"])
     opti.set_value(mpc_vars["v_init"], current_state["v"])
     opti.set_value(mpc_vars["B_init"], current_state["B"])
@@ -147,21 +148,42 @@ def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords,
     opti.set_value(mpc_vars["p_neighbors"], neighbor_trajs)
 
     try:
-        # Solve the QP
         sol = opti.solve()
         
         # Extract numerical results
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
-        # Performance profiling
-        solve_time = sol.stats()['t_wall_total']
-        print(f"MPC solve successful: {solve_time:.4f}s")
+        # Optional: Log the solve time from the stats dictionary
+        # solve_time = sol.stats()['t_wall_total']
         
         return optimal_accel[:, 0], new_trajectory
 
     except RuntimeError:
-        print("MPC solve failed! Using safety fallback.")
-        # Debugging: check the state of the solver at failure
-        # return_zero_accel, keep_old_trajectory
+        # If solver fails, provide a safe fallback (zero acceleration)
+        # and reuse the last known good trajectory
         return np.array([0.0, 0.0, 0.0]), last_traj
+
+'''
+# --- Example of how the Main Loop should look ---
+# 1. Setup
+mpc_vars = setup_MPC_QP(waypoints, num_neighbors)
+history_p = []
+history_predictions = []
+
+# Initialize last_traj for the very first step (stationary at current position)
+last_traj = np.tile(current_state["p"].reshape(3,1), (1, N+1))
+
+# 2. Execution Loop
+for step in range(max_steps):
+    # Run one iteration
+    accel, last_traj = run_mpc_iteration(mpc_vars, current_state, flags, 
+                                         wp_coords, last_traj, neighbors, tree)
+    
+    # Update your history for plotting later
+    history_p.append(current_state["p"].copy())
+    history_predictions.append(last_traj.copy())
+    
+    # Update current_state for next iteration (simulation or sensor read)
+    # current_state = update_drone_physics(current_state, accel)
+'''
