@@ -50,6 +50,30 @@ def clip_polygon_with_half_plane(
 
     return np.asarray(clipped, dtype=float)
 
+def assign_area(vor_partition, drone_positions): 
+    # Assuming 'vor_partition' is an instance of Voronoi_Partition
+    # and 'drone_positions' is a NumPy array of shape (N, 2)
+
+    # 1. Map the dictionary items to a list to maintain a stable indexing order
+    cell_items = list(vor_partition.Voronoi_Cells.items()) 
+
+    # 2. Extract seeds for distance calculation
+    # We use the 'seed' attribute from your Voronoi_Cell class
+    seeds = np.array([cell.seed for _, cell in cell_items])
+
+    # 3. Calculate distance matrix (NumPy broadcasting for efficiency)
+    # Shape: (number_of_cells, number_of_drones)
+    dist = np.sum((seeds[:, np.newaxis, :] - drone_positions[np.newaxis, :, :])**2, axis=2)
+
+    # 4. Update the drone_id inside the existing class instances
+    for i, (key, cell) in enumerate(cell_items):
+        # Find the indices of drones sorted by proximity to this cell's seed
+        sorted_drone_ids = np.argsort(dist[i])
+        
+        # Assign the ID of the single closest drone to the class attribute
+        # This keeps your 'Voronoi_Cell' structure intact
+        cell.drone_id = int(sorted_drone_ids[0])
+
 @dataclass
 class Voronoi_Cell: 
     ''' Voronoi cell assigned to a drone, considered in the 2D plane for partitioning the workspace. '''

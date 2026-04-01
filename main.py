@@ -14,6 +14,7 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition
+from partition.voronoi import assign_area
 
 def build_demo(config): 
     # Load environment configuration
@@ -80,3 +81,4 @@ if __name__ == "__main__":
         title="Voronoi Partition of the Workspace",
     )
 
+    assign_area(vor, drone_positions)
