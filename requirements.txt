@@ -1,0 +1,5 @@
+numpy
+shapely
+scipy
+pathlib
+casadi
