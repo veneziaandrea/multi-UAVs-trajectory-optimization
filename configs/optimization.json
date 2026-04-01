@@ -1,0 +1,12 @@
+{
+    "cost": {
+        "z_ref": 5.0, 
+        "w_seen": 10, 
+        "w_effort": 2
+    },
+    "constraints": {
+        "max_speed": 10.0,
+        "max_acceleration": 3.0,
+        "safe_distance": 0.5
+    }
+}
