@@ -83,7 +83,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
 
     for k in range(N):
         # Kinematic model
-        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt)
+        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5*a[:, k]*dt**2)
         opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
         
         # NOTE: Battery dynamics B[k+1] = B[k] - c*||a||^2 is non-linear.
