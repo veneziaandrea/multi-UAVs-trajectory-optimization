@@ -3,7 +3,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from scipy.optimize import linear_sum_assignment
-from shapely import Polygon
 import shapely
 
 # Ensure that src is on sys.path even when running this module directly
@@ -77,12 +76,13 @@ def get_waypoints_in_partition(waypoints_np, partition_polygon):
     """
     Filters a numpy array of waypoints [N x 3] to find those inside a Shapely polygon.
     """
-   
     # This returns a boolean mask [True, False, True...]
     mask = shapely.contains_xy(partition_polygon, waypoints_np[:, 0], waypoints_np[:, 1])
 
     # Apply the mask to get the waypoints in one shot
     local_wps_np = waypoints_np[mask]
+
+    local_wps_np = np.atleast_2d(local_wps_np)
             
     return local_wps_np
 

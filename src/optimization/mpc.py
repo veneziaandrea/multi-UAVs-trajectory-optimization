@@ -29,7 +29,7 @@ if str(SRC) not in sys.path:
 # Now your config path will ALWAYS be correct
 config_path = CONFIGS / "optimization_params.json"
 
-def setup_MPC_QP(waypoints, num_neighbors): 
+def setup_MPC_QP(num_neighbors): 
     """
     Initializes the CasADi Opti stack. Run this ONCE at the start.
     """
@@ -59,7 +59,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
     # MPC parameters
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
-    num_regions = waypoints.shape[0] 
+    num_regions = mpc_cfg["k_tree_search"]
 
     opti = ca.Opti()
 
@@ -140,7 +140,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
             opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
 
     # --- Solver Choice ---
-    # Using 'osqp' for QP or 'ipopt' for NLP
+    # Using 'qrqp' or 'osqp' but has to be installed for QP or 'ipopt' for NLP
     # 'expand': True speeds up the solver by evaluating the graph once
     opti.solver("osqp", {"expand": True})
 
@@ -149,47 +149,76 @@ def setup_MPC_QP(waypoints, num_neighbors):
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
-        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "k_search": num_regions
     }
 
-def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords, 
+def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
                       last_traj, neighbor_trajs, obs_tree):
     """
-    Executes one step of the MPC. Call this inside your main loop.
+    Executes one step of the MPC.
+    waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
     """
     opti = mpc_vars["opti"]
+    k_limit = mpc_vars["k_search"] # Get the '3' (or '5') from the dict
+
+    # 1. Waypoint Search
+    num_available = waypoint_coords.shape[0]
+    # We can't query more than we have, but we must return exactly k_limit
+    k_query = min(k_limit, num_available)
     
-    # 1. Query KDTree for closest obstacles along the previous trajectory
-    # Transpose last_traj to match (N_points, 3) for KDTree
+    wp_tree = KDTree(waypoint_coords[:, :2])
+    dist, indices = wp_tree.query(current_state["p"][:2], k=k_query)
+    
+    # Handle single-index return if k=1
+    if k_query == 1: indices = [indices]
+    
+    closest_coords_2d = waypoint_coords[indices, :2]
+    closest_flags = waypoint_coords[indices, 2]
+    
+    # 2. Dynamic Padding
+    if k_query < k_limit:
+        padding_count = k_limit - k_query
+        last_coord = closest_coords_2d[-1:, :]
+        closest_coords_2d = np.vstack([closest_coords_2d] + [last_coord]*padding_count)
+        closest_flags = np.append(closest_flags, [1.0]*padding_count)
+    
+    # Convert to 3D for CasADi (3 rows, k_limit columns)
+    z_padding = np.zeros((k_limit, 1))
+    closest_coords_3d = np.hstack((closest_coords_2d, z_padding))
+
     distances_obs, indices_obs = obs_tree.query(np.array(last_traj).T)
-    closest_obs_coords = obs_tree.data[indices_obs].T 
-    waypoints_tree = KDTree(waypoint_coords)
-    distances_wp, indices_wp = waypoints_tree.query(np.array(last_traj).T, k = 3)
-    # neighbor_trajs is (3, N+1, num_neighbors)
+    
+    # Extract the actual 3D coordinates of those closest obstacles
+    # Resulting shape: (3, N+1)
+    closest_obs_coords = obs_tree.data[indices_obs].T
 
-    closest_wp_coords = obs_tree.data[indices_wp].T 
+    # 3. Parameter Update
+    opti.set_value(mpc_vars["p_wp"], closest_coords_3d.T)
+    opti.set_value(mpc_vars["flag"], closest_flags)
 
-    # 2. Update CasADi parameters with current numerical values
+    # --- 3. PARAMETER UPDATE ---
     opti.set_value(mpc_vars["p_init"], current_state["p"])
     opti.set_value(mpc_vars["v_init"], current_state["v"])
     opti.set_value(mpc_vars["B_init"], current_state["B"])
-    opti.set_value(mpc_vars["flag"], local_flags)
-    opti.set_value(mpc_vars["p_wp"], closest_wp_coords)
+    
+    # These now strictly match the (3, 3) and (3,) parameters
+    opti.set_value(mpc_vars["p_wp"], closest_coords_3d.T) 
+    opti.set_value(mpc_vars["flag"], closest_flags)
+    
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
-    # Reshape to (3, (N+1) * num_neighbors) using 'F' (Fortran) order to keep neighbors separate
+    
+    # Neighbor trajectories: flatten (3, N+1, num_neighbors) -> (3, (N+1)*num_neighbors)
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
     opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
 
     try:
-        # Solve the QP
         sol = opti.solve()
-        
-        # Extract numerical results
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
-        # Performance profiling
+        # solver stats
         solve_time = sol.stats()['t_wall_total']
         print(f"MPC solve successful: {solve_time:.4f}s")
         
@@ -197,6 +226,4 @@ def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords,
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
-        # Debugging: check the state of the solver at failure
-        # return_zero_accel, keep_old_trajectory
         return np.array([0.0, 0.0, 0.0]), last_traj

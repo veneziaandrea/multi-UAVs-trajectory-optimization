@@ -117,10 +117,6 @@ if __name__ == "__main__":
     obs_tree = KDTree(obstacle_coords)
     wp_tree = KDTree(waypoints)
 
-    seen = 0 # flag to mark if a waypoint has been visited or not
-    for wp in waypoints:
-        wp = np.append(wp,seen)
-
     # SETUP MPC
     max_iter = 1000
     num_neighbors = len(drone_positions) - 1
@@ -143,27 +139,25 @@ if __name__ == "__main__":
     # assign the waypoints to the associated drone
     assign_area(vor, drone_positions)
 
+        # --- 1. Add the 'seen' column to the global waypoints matrix correctly ---
+    # If waypoints is [N x 2], this makes it [N x 3]
+    if waypoints.shape[1] == 2:
+        seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
+        waypoints = np.hstack((waypoints, seen_column)) # Attach it
+
+    # --- 2. Assignment Phase ---
     for id_d in drone_ids:
-        # 1. Get the cell object from the dictionary
         current_cell = vor.Voronoi_Cells[id_d]
-        
-        # 2. Convert the numpy vertices to a Shapely Polygon
-        # Assuming current_cell.polygon is your Nx2 numpy array
         partition_shape = Polygon(current_cell.polygon)
         
-        # 3. Pass the Shapely object to your function
+        # This now receives a matrix that ALREADY has the 3rd column
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
-        
-        # 4. (Optional) Do something with the assigned waypoints
-        print(f"Drone {id_d} has {len(waypoints_assigned)} waypoints.")
-        
-        print(f"Processing Drone ID: {current_cell.drone_id}")
-        print(f'Aree assegnate: {vor.Voronoi_Cells}')
-        
-    for d_id in drone_ids:
-        vars_ = setup_MPC_QP(waypoints_assigned[d_id], num_neighbors) # num neighbors is the number of other drones
-        new_drone = Drone(d_id, drone_positions[d_id], waypoints_assigned[d_id], vars_, N)
+
+        # Initialize Drone
+        vars_ = setup_MPC_QP(num_neighbors) # Setup with k=3 as discussed
+        new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
+        
 
     # --- MAIN MPC LOOP ---
     num_iter = 0
@@ -183,8 +177,7 @@ if __name__ == "__main__":
             # 2. Run MPC
             accel, new_traj = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
-                current_flags,
-                current_coords,
+                drone.waypoints, 
                 drone.last_traj, neighbor_trajs_array, obs_tree
             )
 
@@ -195,3 +188,5 @@ if __name__ == "__main__":
             drone.last_traj = new_traj
             
         num_iter += 1
+
+print("optimization completed")

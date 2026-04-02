@@ -6,7 +6,7 @@ class Drone:
 
         self.mpc_vars = mpc_vars
 
-        self.waypoints = waypoints
+        self.waypoints = np.atleast_2d(waypoints) # waypoints will be (N, 3)
         # Convert input to numpy array
         p_pos = np.array(start_pos, dtype=float).flatten()
 
@@ -44,20 +44,19 @@ class Drone:
 
     def check_waypoints(self, threshold=0.5):
         """
-        Updates the 'seen' status of waypoints in the [N x 4] numpy array.
+        Updates the 'seen' status of waypoints in the [N x 3] numpy array.
         Expected row format: [x, y, seen_flag]
         """
-        # self.waypoints is a numpy array of shape (num_regions, 4)
         for i in range(self.waypoints.shape[0]):
             # Check if the 'seen_flag' (index 2) is 0
             if self.waypoints[i, 2] == 0:
-                # Calculate distance between current position and the waypoint coords (indices 0,1)
-                dist = np.linalg.norm(self.state["p"] - self.waypoints[i, :2])
+                # Compare ONLY the first two elements (x, y) of the state
+                # vs the first two elements of the waypoint row
+                dist = np.linalg.norm(self.state["p"][:2] - self.waypoints[i, :2])
                 
                 if dist < threshold:
-                    # Update the seen_flag to 1 in the numpy array
-                    self.waypoints[i, 2] = 1
-                    # print(f"[Drone {self.id}] Waypoint reached at {self.waypoints[i, :2]}")
+                    self.waypoints[i, 2] = 1.0
+                    print(f"[Drone {self.id}] Waypoint reached at {self.waypoints[i, :2]}")
 
     def log_telemetry(self, trajectory):
         """
