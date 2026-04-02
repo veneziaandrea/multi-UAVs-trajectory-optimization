@@ -2,6 +2,8 @@ import numpy as np
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from scipy.optimize import linear_sum_assignment
+import shapely
 
 # Ensure that src is on sys.path even when running this module directly
 SRC_DIR = Path(__file__).resolve().parent.parent
@@ -50,29 +52,38 @@ def clip_polygon_with_half_plane(
 
     return np.asarray(clipped, dtype=float)
 
-def assign_area(vor_partition, drone_positions): 
-    # Assuming 'vor_partition' is an instance of Voronoi_Partition
-    # and 'drone_positions' is a NumPy array of shape (N, 2)
 
-    # 1. Map the dictionary items to a list to maintain a stable indexing order
-    cell_items = list(vor_partition.Voronoi_Cells.items()) 
-
-    # 2. Extract seeds for distance calculation
-    # We use the 'seed' attribute from your Voronoi_Cell class
+def assign_area(vor_partition, drone_positions):
+    cell_items = list(vor_partition.Voronoi_Cells.items())
     seeds = np.array([cell.seed for _, cell in cell_items])
-
-    # 3. Calculate distance matrix (NumPy broadcasting for efficiency)
-    # Shape: (number_of_cells, number_of_drones)
-    dist = np.sum((seeds[:, np.newaxis, :] - drone_positions[np.newaxis, :, :])**2, axis=2)
-
-    # 4. Update the drone_id inside the existing class instances
-    for i, (key, cell) in enumerate(cell_items):
-        # Find the indices of drones sorted by proximity to this cell's seed
-        sorted_drone_ids = np.argsort(dist[i])
+    
+    # Matrice dei costi (distanze al quadrato)
+    dist_matrix = np.sum((seeds[:, np.newaxis, :] - drone_positions[np.newaxis, :, :])**2, axis=2)
+    
+    # Risolve il problema dell'assegnazione ottima (Minimizza distanza totale)
+    # Garantisce 1 drone -> 1 cella senza duplicati
+    cell_indices, drone_indices = linear_sum_assignment(dist_matrix)
+    
+    new_cells = {}
+    for c_idx, d_idx in zip(cell_indices, drone_indices):
+        cell = cell_items[c_idx][1]
+        cell.drone_id = int(d_idx)
+        new_cells[cell.drone_id] = cell
         
-        # Assign the ID of the single closest drone to the class attribute
-        # This keeps your 'Voronoi_Cell' structure intact
-        cell.drone_id = int(sorted_drone_ids[0])
+    vor_partition.Voronoi_Cells = new_cells
+
+def get_waypoints_in_partition(waypoints_np, partition_polygon):
+    """
+    Filters a numpy array of waypoints [N x 3] to find those inside a Shapely polygon.
+    """
+   
+    # This returns a boolean mask [True, False, True...]
+    mask = shapely.contains_xy(partition_polygon, waypoints_np[:, 0], waypoints_np[:, 1])
+
+    # Apply the mask to get the waypoints in one shot
+    local_wps_np = waypoints_np[mask]
+            
+    return local_wps_np
 
 @dataclass
 class Voronoi_Cell: 
