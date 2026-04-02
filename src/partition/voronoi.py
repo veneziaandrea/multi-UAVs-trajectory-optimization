@@ -3,6 +3,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from scipy.optimize import linear_sum_assignment
+from shapely import Polygon
 import shapely
 
 # Ensure that src is on sys.path even when running this module directly

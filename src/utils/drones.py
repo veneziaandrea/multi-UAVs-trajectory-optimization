@@ -2,27 +2,27 @@ import numpy as np
 
 class Drone:
     def __init__(self, drone_id, start_pos, waypoints, mpc_vars, horizon_n):
-        """
-        drone_id: Unique identifier (int or str)
-        start_pos: Initial [x, y, z] numpy array
-        waypoints: waypoints assigned to this drone (x,y,seen)
-        mpc_vars: The dictionary returned by setup_MPC_QP
-        horizon_n: Prediction horizon (N)
-        """
         self.id = drone_id
-        
-        # State: p (position), v (velocity), B (battery)
+
+        self.mpc_vars = mpc_vars
+
+        self.waypoints = waypoints
+        # Convert input to numpy array
+        p_pos = np.array(start_pos, dtype=float).flatten()
+
+        # If the input is [x, y], add a default Z (e.g., 0.0 or 1.0 for takeoff)
+        if p_pos.size == 2:
+            p_pos = np.append(p_pos, 0.0) 
+
+        # Now p_pos is guaranteed to be size 3, so reshape(3,1) will work
         self.state = {
-            "p": np.array(start_pos, dtype=float),
+            "p": p_pos,
             "v": np.zeros(3),
             "B": 100.0
         }
-        
-        self.waypoints = waypoints  #
-        self.mpc_vars = mpc_vars
-        
-        # Initialize the last trajectory as a static point for the first iteration
+
         self.last_traj = np.tile(self.state["p"].reshape(3, 1), (1, horizon_n + 1))
+    
         
         # Telemetry history for plotting
         self.history_p = []

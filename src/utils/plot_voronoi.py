@@ -27,10 +27,12 @@ def _extract_cells(voronoi_partition):
     return list(cells)
 
 
+
 def plot_voronoi_partition(
     map3d,
     voronoi_partition,
     drone_positions=None,
+    waypoints=None,
     *,
     ax=None,
     show=True,
@@ -44,6 +46,7 @@ def plot_voronoi_partition(
     workspace = np.asarray(map3d.workspace, dtype=float)
     cells = _extract_cells(voronoi_partition)
     drone_positions = _as_2d_array(drone_positions)
+    waypoints = _as_2d_array(waypoints)
     cmap = plt.get_cmap("tab20", max(len(cells), 1))
 
     # Plot workspace boundary first so the partition remains inside it.
@@ -96,6 +99,19 @@ def plot_voronoi_partition(
             label="Obstacle" if index == 0 else None,
         )
         ax.add_patch(obstacle_patch)
+
+    # Plot dei Waypoint
+    if waypoints is not None and len(waypoints) > 0:
+        ax.scatter(
+            waypoints[:, 0],
+            waypoints[:, 1],
+            color="black",
+            marker="o",
+            s=15,
+            alpha=0.6,
+            label="Coverage Waypoints",
+            zorder=3, # Sotto droni e seed, sopra le celle
+        )
 
     if drone_positions is not None and len(drone_positions) > 0:
         ax.scatter(

@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import math
 from scipy.spatial import KDTree
+from shapely.geometry import Polygon
 
 # Set the root directory and add the source directory to the Python path
 ROOT = Path(__file__).resolve().parent
@@ -118,26 +119,46 @@ if __name__ == "__main__":
 
     seen = 0 # flag to mark if a waypoint has been visited or not
     for wp in waypoints:
-        wp.append(seen)
+        wp = np.append(wp,seen)
 
     # SETUP MPC
     max_iter = 1000
     num_neighbors = len(drone_positions) - 1
 
+    # take the prediction horizon and time interval from config file
+    config_path = ROOT / "configs" / "optimization_params.json"
+    config = load_config(config_path)
+    mpc_cfg = config["mpc"]
+    N = mpc_cfg["prediction_horizon"]
+    dt = mpc_cfg["timestep"]
+
     # --- INITIALIZATION ---
-    # Assume 'drones' is a list of objects or a dictionary containing 
+    # Assume 'drones' is a list of objects containing 
     # the state, mpc_vars, and trajectory for each drone ID.
-        # ... inside your initialization ...
     drones = []
-    drone_ids = []
+    drone_ids = [0] * len(drone_positions)
     for i in range(len(drone_positions)):
         drone_ids[i] = i
-    
+
     # assign the waypoints to the associated drone
     assign_area(vor, drone_positions)
+
     for id_d in drone_ids:
-        waypoints_assigned= get_waypoints_in_partition(waypoints, vor.Voronoi_Cells.drone_id[id_d])
-    print(f'Aree assegnate: {vor.Voronoi_Cells}')
+        # 1. Get the cell object from the dictionary
+        current_cell = vor.Voronoi_Cells[id_d]
+        
+        # 2. Convert the numpy vertices to a Shapely Polygon
+        # Assuming current_cell.polygon is your Nx2 numpy array
+        partition_shape = Polygon(current_cell.polygon)
+        
+        # 3. Pass the Shapely object to your function
+        waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
+        
+        # 4. (Optional) Do something with the assigned waypoints
+        print(f"Drone {id_d} has {len(waypoints_assigned)} waypoints.")
+        
+        print(f"Processing Drone ID: {current_cell.drone_id}")
+        print(f'Aree assegnate: {vor.Voronoi_Cells}')
         
     for d_id in drone_ids:
         vars_ = setup_MPC_QP(waypoints_assigned[d_id], num_neighbors) # num neighbors is the number of other drones
@@ -156,11 +177,14 @@ if __name__ == "__main__":
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
             neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
 
+            current_flags = drone.waypoints[:, 2]      # All rows, 3rd column
+            current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
+
             # 2. Run MPC
             accel, new_traj = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
-                np.array([wp.seen for wp in drone.waypoints]),
-                np.array([wp.coords for wp in drone.waypoints]),
+                current_flags,
+                current_coords,
                 drone.last_traj, neighbor_trajs_array, obs_tree
             )
 

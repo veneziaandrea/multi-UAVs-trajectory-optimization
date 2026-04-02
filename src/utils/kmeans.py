@@ -56,13 +56,17 @@ def _initialize_centroids_kmeans_pp(points, num_clusters, rng):
     return np.asarray(centroids, dtype=float)
 
 
-def kmeans_clustering(free_space, num_drones, *, seed=None, num_samples=2000, max_iter=100):
+def kmeans_clustering(free_space, num_drones, *, seed=None, num_samples=2000, max_iter=100, waypoints=None):
     """Find Voronoi seeds by clustering random samples drawn from the map free space."""
     if num_drones <= 0:
         raise ValueError("num_drones must be positive.")
 
     rng = np.random.default_rng(seed)
-    points = _sample_free_space_points(free_space, num_samples=num_samples, rng=rng)
+    
+    if waypoints is not None:
+        points = waypoints
+    else:
+        points = _sample_free_space_points(free_space, num_samples=num_samples, rng=rng)
 
     if len(points) < num_drones:
         raise ValueError("Not enough free-space samples to initialize all k-means centroids.")

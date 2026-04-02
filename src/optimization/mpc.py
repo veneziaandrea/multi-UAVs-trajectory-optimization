@@ -5,6 +5,30 @@ import casadi as ca
 import numpy as np
 from scipy.spatial import KDTree
 
+from pathlib import Path
+import sys
+
+def get_project_root() -> Path:
+    """Climbs up from the current file until it finds the folder containing 'src'."""
+    current = Path(__file__).resolve()
+    # Check current folder and all parents
+    for parent in [current] + list(current.parents):
+        if (parent / "src").is_dir():
+            return parent
+    # Fallback to the script's parent if 'src' isn't found
+    return current.parent
+
+ROOT = get_project_root()
+SRC = ROOT / "src"
+CONFIGS = ROOT / "configs"
+
+# Add SRC to sys.path if it's not there
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+# Now your config path will ALWAYS be correct
+config_path = CONFIGS / "optimization_params.json"
+
 def setup_MPC_QP(waypoints, num_neighbors): 
     """
     Initializes the CasADi Opti stack. Run this ONCE at the start.
@@ -13,7 +37,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
     SRC = ROOT / "src"
     if str(SRC) not in sys.path:
         sys.path.insert(0, str(SRC))
-    config_path = ROOT / "configs" / "optimization.json"
+    config_path = CONFIGS / "optimization_params.json"
     
     # Load configuration
     config = load_config(config_path)
@@ -34,7 +58,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
 
     # MPC parameters
     N = mpc_cfg["prediction_horizon"]
-    dt = mpc_cfg["dt"]
+    dt = mpc_cfg["timestep"]
     num_regions = waypoints.shape[0] 
 
     opti = ca.Opti()
@@ -53,7 +77,7 @@ def setup_MPC_QP(waypoints, num_neighbors):
     # Closest obstacles for each step of the horizon
     p_obs_closest = opti.parameter(3, N+1)
     # Predicted trajectories of neighboring drones (3D, Horizon, Neighbor ID)
-    p_neighbors = opti.parameter(3, N+1, num_neighbors) 
+    p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
 
     # Target waypoints and their active/inactive flags
     p_wp = opti.parameter(3, num_regions) 
@@ -104,9 +128,13 @@ def setup_MPC_QP(waypoints, num_neighbors):
         opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
     
     # --- Linearized Neighbor Collision Avoidance ---
-    for k in range(N+1):
-        for j in range(num_neighbors):
-            dp_bar = p_ego_prev[:, k] - p_neighbors[:, k, j]
+    for j in range(num_neighbors):
+        for k in range(N+1):
+            # Slice the wide matrix to get the k-th step of the j-th neighbor
+            # The column index logic: j * (N+1) + k
+            col_idx = j * (N+1) + k
+            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+            
             dist_bar_sqr = ca.sumsqr(dp_bar)
             linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
             opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
@@ -137,6 +165,8 @@ def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords,
     closest_obs_coords = obs_tree.data[indices_obs].T 
     waypoints_tree = KDTree(waypoint_coords)
     distances_wp, indices_wp = waypoints_tree.query(np.array(last_traj).T, k = 3)
+    # neighbor_trajs is (3, N+1, num_neighbors)
+
     closest_wp_coords = obs_tree.data[indices_wp].T 
 
     # 2. Update CasADi parameters with current numerical values
@@ -147,7 +177,9 @@ def run_mpc_iteration(mpc_vars, current_state, local_flags, waypoint_coords,
     opti.set_value(mpc_vars["p_wp"], closest_wp_coords)
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
-    opti.set_value(mpc_vars["p_neighbors"], neighbor_trajs)
+    # Reshape to (3, (N+1) * num_neighbors) using 'F' (Fortran) order to keep neighbors separate
+    flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
+    opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
 
     try:
         # Solve the QP
