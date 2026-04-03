@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 200
+    max_iter = 100
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -162,14 +162,14 @@ if __name__ == "__main__":
 
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dt = 0.1 # Should match your MPC config
+    dt = 0.05 # Should match your MPC config
     dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-    dJ_thresh = 1e-3
+    dJ_thresh = 1e-4
     prev_total_cost = 1e6
 
     while num_iter <= max_iter:
-
-            # Check if ALL drones have finished their tasks
+        total_loop_cost = 0 # Track sum for the whole fleet
+        # Check if ALL drones have finished their tasks
         all_done = all(np.all(d.waypoints[:, 2] == 1.0) for d in drones)
         
         if all_done:
@@ -177,6 +177,7 @@ if __name__ == "__main__":
             break
         
         for drone in drones:
+            
             # 1. Collect trajectories from OTHER drones
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
             neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
@@ -191,19 +192,32 @@ if __name__ == "__main__":
                 drone.last_traj, neighbor_trajs_array, obs_tree
             )
 
+            total_loop_cost += current_cost_value
+
             # 3. Update physics and internal logs
             drone.drone_model(accel, dt)
             drone.check_waypoints()
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
         
-        # Check for convergence
-        if abs(prev_total_cost - current_cost_value) < dJ_thresh:
-            print("Solver converged: Cost is no longer decreasing.")
+        if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
+            print("Converged!")
             break
             
-        prev_total_cost = current_cost_value
+        prev_total_cost = total_loop_cost
         num_iter += 1
-        
 
 print("optimization completed")
+
+# 2. 2D Animation
+# This will show the "movie" of the drones dodging obstacles
+map_cfg = config["map"]
+map_limits = [ map_cfg["x_bounds"],
+               map_cfg["y_bounds"],
+               map_cfg["z_bounds"]
+             ]
+animate_simulation(drones, map3d.obstacles, map_limits)
+# This will open a window you can rotate to see the 3D flight paths
+plot_results(drones, map3d.obstacles)
+
+
