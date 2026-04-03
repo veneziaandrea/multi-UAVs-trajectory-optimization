@@ -1,12 +1,20 @@
 from config import load_config
 import sys
 from pathlib import Path
-import casadi as ca
 import numpy as np
 from scipy.spatial import KDTree
-
 from pathlib import Path
-import sys
+import os
+
+# This forces Python to look specifically in your site-packages for the DLLs
+try:
+    import casadi as ca
+    casadi_path = Path(ca.__file__).parent
+    os.add_dll_directory(str(casadi_path))
+    # Also add the root of the venv just in case
+    os.add_dll_directory(str(Path(sys.executable).parent))
+except Exception:
+    pass
 
 def get_project_root() -> Path:
     """Climbs up from the current file until it finds the folder containing 'src'."""
@@ -142,7 +150,7 @@ def setup_MPC_QP(num_neighbors):
     # --- Solver Choice ---
     # Using 'qrqp' or 'osqp' but has to be installed for QP or 'ipopt' for NLP
     # 'expand': True speeds up the solver by evaluating the graph once
-    opti.solver("osqp", {"expand": True})
+    opti.solver("ipopt", {"expand": True})
 
     # Return a dictionary containing the symbolic objects to be used in the loop
     return {
@@ -215,14 +223,15 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
 
     try:
         sol = opti.solve()
+        cost_value = sol.value(mpc_vars["opti"].f)
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
         # solver stats
         solve_time = sol.stats()['t_wall_total']
-        print(f"MPC solve successful: {solve_time:.4f}s")
+        print(f"MPC solve successful: {solve_time:.4f}s") 
         
-        return optimal_accel[:, 0], new_trajectory
+        return optimal_accel[:, 0], new_trajectory, cost_value
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")

@@ -19,6 +19,7 @@ from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration 
 from utils.drones import Drone
+from optimization.optimization_plots import plot_results, animate_simulation
 
 def build_demo(config): 
     # Load environment configuration
@@ -118,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 1000
+    max_iter = 200
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -163,8 +164,17 @@ if __name__ == "__main__":
     num_iter = 0
     dt = 0.1 # Should match your MPC config
     dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
+    dJ_thresh = 1e-3
+    prev_total_cost = 1e6
 
     while num_iter <= max_iter:
+
+            # Check if ALL drones have finished their tasks
+        all_done = all(np.all(d.waypoints[:, 2] == 1.0) for d in drones)
+        
+        if all_done:
+            print(f"Mission accomplished in {num_iter} steps!")
+            break
         
         for drone in drones:
             # 1. Collect trajectories from OTHER drones
@@ -175,7 +185,7 @@ if __name__ == "__main__":
             current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
 
             # 2. Run MPC
-            accel, new_traj = run_mpc_iteration(
+            accel, new_traj, current_cost_value = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
                 drone.last_traj, neighbor_trajs_array, obs_tree
@@ -186,7 +196,14 @@ if __name__ == "__main__":
             drone.check_waypoints()
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
+        
+        # Check for convergence
+        if abs(prev_total_cost - current_cost_value) < dJ_thresh:
+            print("Solver converged: Cost is no longer decreasing.")
+            break
             
+        prev_total_cost = current_cost_value
         num_iter += 1
+        
 
 print("optimization completed")
