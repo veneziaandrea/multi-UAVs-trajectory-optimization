@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 100
+    max_iter = 200
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     num_iter = 0
     dt = 0.05 # Should match your MPC config
     dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-    dJ_thresh = 1e-4
+    dJ_thresh = 1e-6
     prev_total_cost = 1e6
 
     while num_iter <= max_iter:
@@ -209,15 +209,19 @@ if __name__ == "__main__":
 
 print("optimization completed")
 
-# 2. 2D Animation
-# This will show the "movie" of the drones dodging obstacles
-map_cfg = config["map"]
-map_limits = [ map_cfg["x_bounds"],
-               map_cfg["y_bounds"],
-               map_cfg["z_bounds"]
-             ]
-animate_simulation(drones, map3d.obstacles, map_limits)
 # This will open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
+# 2. 2D Animation
+
+# This will show the "movie" of the drones dodging obstacles
+config_path = ROOT / "configs" / "demo_parameters.json"
+config = load_config(config_path)
+map_cfg = config["map"]
+map_limits = [ map_cfg["x_bounds"],
+            map_cfg["y_bounds"],
+            map_cfg["z_bounds"]
+            ]
+animate_simulation(drones, map3d.obstacles, map_limits)
+
 
 

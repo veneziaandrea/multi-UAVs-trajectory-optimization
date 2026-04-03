@@ -25,7 +25,7 @@ def plot_results(drones, obstacles):
         # 1. Use facecolors='r' 
         # 2. Set shade=False to avoid the internal broadcast error
         ax.plot_surface(x_grid, y_grid, z_grid, 
-                        facecolors='r', 
+                        color='r', 
                         alpha=0.3, 
                         shade=False)
         # Optional: Add a cap on top
@@ -59,7 +59,7 @@ def plot_results(drones, obstacles):
     # Set axis limits to match your map bounds [0, 40]
     ax.set_xlim(0, 40)
     ax.set_ylim(0, 40)
-    ax.set_zlim(0, 10) # Adjust based on your max flying height
+    ax.set_zlim(0, 20) # Adjust based on your max flying height
     
     plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
     plt.tight_layout()

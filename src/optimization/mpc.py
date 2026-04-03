@@ -235,4 +235,4 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
-        return np.array([0.0, 0.0, 0.0]), last_traj
+        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value

@@ -1,17 +1,17 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 10, 
+        "w_seen": 100, 
         "w_effort": 2
     },
     "constraints": {
-        "max_speed": 10.0,
+        "max_speed": 7.0,
         "max_acceleration": 3.0,
         "safe_distance": 0.5
     },
     "mpc": {
         "prediction_horizon": 20,
         "timestep": 0.05,
-        "k_tree_search": 3
+        "k_tree_search": 5
     }
 }
