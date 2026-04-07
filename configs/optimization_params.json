@@ -1,7 +1,7 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 100, 
+        "w_seen": 5, 
         "w_effort": 2
     },
     "constraints": {
@@ -12,6 +12,6 @@
     "mpc": {
         "prediction_horizon": 20,
         "timestep": 0.05,
-        "k_tree_search": 5
+        "k_tree_search": 3
     }
 }

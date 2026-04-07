@@ -5,6 +5,7 @@ import numpy as np
 from scipy.spatial import KDTree
 from pathlib import Path
 import os
+import time
 
 # This forces Python to look specifically in your site-packages for the DLLs
 try:
@@ -69,7 +70,7 @@ def setup_MPC_QP(num_neighbors):
     dt = mpc_cfg["timestep"]
     num_regions = mpc_cfg["k_tree_search"]
 
-    opti = ca.Opti()
+    opti = ca.Opti("conic")
 
     # --- Optimization Variables ---
     p = opti.variable(3, N+1)  # Position
@@ -150,7 +151,7 @@ def setup_MPC_QP(num_neighbors):
     # --- Solver Choice ---
     # Using 'qrqp' or 'osqp' but has to be installed for QP or 'ipopt' for NLP
     # 'expand': True speeds up the solver by evaluating the graph once
-    opti.solver("ipopt", {"expand": True})
+    opti.solver("osqp", {"expand": True})
 
     # Return a dictionary containing the symbolic objects to be used in the loop
     return {
@@ -222,13 +223,22 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
 
     try:
+
+        # Start the high-resolution timer right before the solve step
+        start_time = time.perf_counter()
         sol = opti.solve()
+        # Stop the timer immediately after
+        end_time = time.perf_counter()
+
+        # Calculate the elapsed time
+        solve_time = end_time - start_time
         cost_value = sol.value(mpc_vars["opti"].f)
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
         # solver stats
-        solve_time = sol.stats()['t_wall_total']
+        # when using ipopt
+        # solve_time = sol.stats()['t_wall_total']
         print(f"MPC solve successful: {solve_time:.4f}s") 
         
         return optimal_accel[:, 0], new_trajectory, cost_value

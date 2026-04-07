@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 200
+    max_iter = 1000
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -140,18 +140,17 @@ if __name__ == "__main__":
     # assign the waypoints to the associated drone
     assign_area(vor, drone_positions)
 
-        # --- 1. Add the 'seen' column to the global waypoints matrix correctly ---
+    # Add the 'seen' column to the global waypoints matrix ---
     # If waypoints is [N x 2], this makes it [N x 3]
     if waypoints.shape[1] == 2:
         seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
         waypoints = np.hstack((waypoints, seen_column)) # Attach it
 
-    # --- 2. Assignment Phase ---
+    # --- Assignment Phase ---
     for id_d in drone_ids:
         current_cell = vor.Voronoi_Cells[id_d]
         partition_shape = Polygon(current_cell.polygon)
         
-        # This now receives a matrix that ALREADY has the 3rd column
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
@@ -178,14 +177,14 @@ if __name__ == "__main__":
         
         for drone in drones:
             
-            # 1. Collect trajectories from OTHER drones
+            # Collect trajectories from OTHER drones
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
             neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
 
             current_flags = drone.waypoints[:, 2]      # All rows, 3rd column
             current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
 
-            # 2. Run MPC
+            # Run MPC
             accel, new_traj, current_cost_value = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
@@ -194,7 +193,7 @@ if __name__ == "__main__":
 
             total_loop_cost += current_cost_value
 
-            # 3. Update physics and internal logs
+            # Update physics and internal logs
             drone.drone_model(accel, dt)
             drone.check_waypoints()
             drone.log_telemetry(new_traj)
