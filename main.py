@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 1000
+    max_iter = 500
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file

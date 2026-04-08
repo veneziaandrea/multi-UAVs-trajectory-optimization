@@ -100,8 +100,15 @@ def setup_MPC_QP(num_neighbors):
   
     # Task cost: Reach waypoints (if flag is 0)
     for i in range(num_regions):
-        # Minimize distance between the end of horizon and the waypoint
-        cost += (1 - flag[i]) * ca.sumsqr(p[:, N] - p_wp[:, i]) * w_seen
+        # Accumulate error along all the horizon
+        for k in range(1, N + 1): 
+            cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
+
+    # Control effort cost: Reduce acceleration magnitude
+    for k in range(N):
+        cost += w_effort * ca.sumsqr(a[:, k])
+        
+    opti.minimize(cost)
 
     # Control effort cost: Reduce acceleration magnitude
     for k in range(N):
@@ -237,7 +244,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         optimal_accel = sol.value(mpc_vars["a"])
         
         # solver stats
-        # when using ipopt
+        # when using ipopt 
         # solve_time = sol.stats()['t_wall_total']
         print(f"MPC solve successful: {solve_time:.4f}s") 
         
