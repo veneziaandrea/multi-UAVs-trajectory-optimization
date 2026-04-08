@@ -12,6 +12,7 @@
     "mpc": {
         "prediction_horizon": 20,
         "timestep": 0.05,
-        "k_tree_search": 3
+        "k_wp_search": 3,
+        "k_obs_search": 2
     }
 }

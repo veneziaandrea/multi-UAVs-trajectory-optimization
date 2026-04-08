@@ -68,7 +68,8 @@ def setup_MPC_QP(num_neighbors):
     # MPC parameters
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
-    num_regions = mpc_cfg["k_tree_search"]
+    num_regions = mpc_cfg["k_wp_search"]
+    k_obs = mpc_cfg["k_obs_search"]
 
     opti = ca.Opti("conic")
 
@@ -84,7 +85,7 @@ def setup_MPC_QP(num_neighbors):
     B_init = opti.parameter(1)
     
     # Closest obstacles for each step of the horizon
-    p_obs_closest = opti.parameter(3, N+1)
+    p_obs_closest = opti.parameter(3, (N+1)* k_obs) 
     # Predicted trajectories of neighboring drones (3D, Horizon, Neighbor ID)
     p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
 
@@ -166,7 +167,7 @@ def setup_MPC_QP(num_neighbors):
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
-        "k_search": num_regions
+        "k_search": num_regions, "k_obs": k_obs
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
@@ -175,55 +176,71 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
     """
-    opti = mpc_vars["opti"]
-    k_limit = mpc_vars["k_search"] # Get the '3' (or '5') from the dict
 
-    # 1. Waypoint Search
+    opti = mpc_vars["opti"]
+    k_limit = mpc_vars["k_search"]
+    k_obs = mpc_vars["k_obs"] # Assicurati che questo sia nel dizionario mpc_vars!
+
+    # --- 1. WAYPOINT SEARCH ---
     num_available = waypoint_coords.shape[0]
-    # We can't query more than we have, but we must return exactly k_limit
     k_query = min(k_limit, num_available)
     
+    # Rimosso k=k_obs da qui, va solo nella query
     wp_tree = KDTree(waypoint_coords[:, :2])
     dist, indices = wp_tree.query(current_state["p"][:2], k=k_query)
     
-    # Handle single-index return if k=1
-    if k_query == 1: indices = [indices]
+    if k_query == 1: 
+        indices = [indices]
     
+    # Definizione corretta delle coordinate locali
     closest_coords_2d = waypoint_coords[indices, :2]
     closest_flags = waypoint_coords[indices, 2]
+
+    # --- 2. DYNAMIC PADDING ---
+    final_coords_2d = closest_coords_2d
+    final_flags = closest_flags
     
-    # 2. Dynamic Padding
     if k_query < k_limit:
         padding_count = k_limit - k_query
         last_coord = closest_coords_2d[-1:, :]
-        closest_coords_2d = np.vstack([closest_coords_2d] + [last_coord]*padding_count)
-        closest_flags = np.append(closest_flags, [1.0]*padding_count)
+        final_coords_2d = np.vstack([closest_coords_2d] + [last_coord] * padding_count)
+        final_flags = np.append(closest_flags, [1.0] * padding_count)
     
-    # Convert to 3D for CasADi (3 rows, k_limit columns)
+    # Conversione in 3D (p_wp)
     z_padding = np.zeros((k_limit, 1))
-    closest_coords_3d = np.hstack((closest_coords_2d, z_padding))
+    closest_coords_3d = np.hstack((final_coords_2d, z_padding))
 
-    distances_obs, indices_obs = obs_tree.query(np.array(last_traj).T)
+    # --- 3. OBSTACLE SEARCH (K-NEAREST) ---
+    # Query per ogni punto della traiettoria precedente
+    # last_traj shape: (3, N+1)
+    dist_obs, indices_obs = obs_tree.query(last_traj.T, k=k_obs)
     
-    # Extract the actual 3D coordinates of those closest obstacles
-    # Resulting shape: (3, N+1)
-    closest_obs_coords = obs_tree.data[indices_obs].T
+    # Se k_obs=1, indices_obs è (N+1,), forziamo (N+1, 1)
+    if k_obs == 1:
+        indices_obs = indices_obs.reshape(-1, 1)
 
-    # 3. Parameter Update
-    opti.set_value(mpc_vars["p_wp"], closest_coords_3d.T)
-    opti.set_value(mpc_vars["flag"], closest_flags)
+    # Costruiamo la matrice per il solver (3 righe, (N+1)*k_obs colonne)
+    num_points = last_traj.shape[1]
+    closest_obs_coords = np.zeros((3, num_points * k_obs))
+    
+    for k in range(num_points):
+        for j in range(k_obs):
+            obs_idx = indices_obs[k, j]
+            col_idx = k * k_obs + j
+            closest_obs_coords[:, col_idx] = obs_tree.data[obs_idx]
 
-    # --- 3. PARAMETER UPDATE ---
+    # --- 4. SET PARAMETERS ---
     opti.set_value(mpc_vars["p_init"], current_state["p"])
     opti.set_value(mpc_vars["v_init"], current_state["v"])
     opti.set_value(mpc_vars["B_init"], current_state["B"])
     
-    # These now strictly match the (3, 3) and (3,) parameters
-    opti.set_value(mpc_vars["p_wp"], closest_coords_3d.T) 
-    opti.set_value(mpc_vars["flag"], closest_flags)
+    opti.set_value(mpc_vars["p_wp"], closest_coords_3d.T)
+    opti.set_value(mpc_vars["flag"], final_flags)
     
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
+    
+    # ... resto della funzione (neighbor trajs e solve) ...
     
     # Neighbor trajectories: flatten (3, N+1, num_neighbors) -> (3, (N+1)*num_neighbors)
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
