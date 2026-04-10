@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 500
+    max_iter = 300
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -161,9 +161,9 @@ if __name__ == "__main__":
 
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dt = 0.05 # Should match your MPC config
-    dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-    dJ_thresh = 1e-6
+    dt = 0.05 # Should match the MPC config
+    dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
+    dJ_thresh = 1e-4
     prev_total_cost = 1e6
 
     while num_iter <= max_iter:

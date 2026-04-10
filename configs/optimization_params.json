@@ -2,16 +2,20 @@
     "cost": {
         "z_ref": 5.0, 
         "w_seen": 5, 
-        "w_effort": 2
+        "w_effort": 3,
+        "w_battery": 1,
+        "p_hover": 100,
+        "w_z": 3,
+        "w_slack_collision": 5000
     },
     "constraints": {
         "max_speed": 7.0,
         "max_acceleration": 3.0,
-        "safe_distance": 0.5
+        "safe_distance": 1
     },
     "mpc": {
         "prediction_horizon": 20,
-        "timestep": 0.05,
+        "timestep": 0.1,
         "k_wp_search": 3,
         "k_obs_search": 2
     }

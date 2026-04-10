@@ -37,35 +37,27 @@ if str(SRC) not in sys.path:
 
 # Now your config path will ALWAYS be correct
 config_path = CONFIGS / "optimization_params.json"
+config = load_config(config_path)
 
 def setup_MPC_QP(num_neighbors): 
-    """
-    Initializes the CasADi Opti stack. Run this ONCE at the start.
-    """
-    ROOT = Path(__file__).resolve().parent
-    SRC = ROOT / "src"
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
-    config_path = CONFIGS / "optimization_params.json"
-    
-    # Load configuration
-    config = load_config(config_path)
+    # ... [Inizializzazione ROOT, SRC, config...] ...
 
-    # Unpack variables from config
     cost_cfg = config["cost"]
     constraints_cfg = config["constraints"]
     mpc_cfg = config["mpc"]
 
-    # Cost function weights
     w_seen = cost_cfg["w_seen"]
     w_effort = cost_cfg["w_effort"]
+    w_batt = cost_cfg["w_battery"]
+    p_hover = cost_cfg["p_hover"]
+    z_ref = cost_cfg["z_ref"]
+    w_z = cost_cfg["w_z"] # Aggiungi questo al JSON, o usa un default
+    w_slack = cost_cfg["w_slack_collision"] # Peso ENORME per le collisioni
 
-    # Physical constraints
     max_vel = constraints_cfg["max_speed"]
     max_acc = constraints_cfg["max_acceleration"]
     safe_rad = constraints_cfg["safe_distance"] 
 
-    # MPC parameters
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
     num_regions = mpc_cfg["k_wp_search"]
@@ -73,95 +65,87 @@ def setup_MPC_QP(num_neighbors):
 
     opti = ca.Opti("conic")
 
-    # --- Optimization Variables ---
-    p = opti.variable(3, N+1)  # Position
-    v = opti.variable(3, N+1)  # Velocity
-    B = opti.variable(1, N+1)  # Battery state
-    a = opti.variable(3, N)    # Acceleration input
+    # --- Variables ---
+    p = opti.variable(3, N+1)  
+    v = opti.variable(3, N+1)  
+    B = opti.variable(1, N+1)  
+    a = opti.variable(3, N)    
+    
+    # SLACK VARIABLES per evitare i minimi locali
+    eps_obs = opti.variable(k_obs, N+1)
 
-    # --- Parameters (Updated at each MPC iteration) ---
+    # --- Parameters ---
     p_init = opti.parameter(3) 
     v_init = opti.parameter(3)
     B_init = opti.parameter(1)
     
-    # Closest obstacles for each step of the horizon
-    p_obs_closest = opti.parameter(3, (N+1)* k_obs) 
-    # Predicted trajectories of neighboring drones (3D, Horizon, Neighbor ID)
+    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
     p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
-
-    # Target waypoints and their active/inactive flags
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
-
-    # Previous solution used for Taylor expansion (linearization)
     p_ego_prev = opti.parameter(3, N+1)
 
-    # --- Cost Function ---
+    # --- COST FUNCTION ---
     cost = 0
   
-    # Task cost: Reach waypoints (if flag is 0)
+    # 1. Waypoints & Hovering (Battery)
     for i in range(num_regions):
-        # Accumulate error along all the horizon
         for k in range(1, N + 1): 
             cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
 
-    # Control effort cost: Reduce acceleration magnitude
+    # 2. Control Effort, Battery (Velocity), and Z-Reference Tracking
     for k in range(N):
         cost += w_effort * ca.sumsqr(a[:, k])
-        
+        cost += w_batt * ca.sumsqr(v[:, k])
+        cost += w_z * ca.sumsqr(p[2, k] - z_ref) # Mantieni la quota!
+
+    # 3. Penalità sulle Slack Variables (Funge da Barrier Function)
+    for k in range(1, N + 1):
+        for j in range(k_obs):
+            cost += w_slack * ca.sumsqr(eps_obs[j, k])
+
     opti.minimize(cost)
 
-    # Control effort cost: Reduce acceleration magnitude
-    for k in range(N):
-        cost += w_effort * ca.sumsqr(a[:, k])
-        
-    opti.minimize(cost)
-
-    # --- Dynamics Constraints (Multiple Shooting) ---
+    # --- DYNAMICS CONSTRAINTS ---
     opti.subject_to(p[:, 0] == p_init)
     opti.subject_to(v[:, 0] == v_init)
-    opti.subject_to(B[:, 0] == B_init)
 
     for k in range(N):
-        # Kinematic model
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
         opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
-        
-        # NOTE: Battery dynamics B[k+1] = B[k] - c*||a||^2 is non-linear.
-        # To keep this as a QP for OSQP/QRQP, we treat Battery as a simple 
-        # state bound here. You can calculate the drop after solving.
 
-    # --- Physical Bounds ---
+    # (La dinamica complessa della batteria viene calcolata post-solve nel main)
+
+    # --- PHYSICAL BOUNDS ---
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
-    opti.subject_to(opti.bounded(0, B, 100)) 
-
-    # --- Linearized Obstacle Avoidance ---
-    for k in range(N+1):
-        dp_bar = p_ego_prev[:, k] - p_obs_closest[:, k]
-        dist_bar_sqr = ca.sumsqr(dp_bar)
-        # First-order Taylor expansion around p_ego_prev
-        linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
-        opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
     
-    # --- Linearized Neighbor Collision Avoidance ---
+    for k in range(1, N+1):
+        for j in range(k_obs):
+            opti.subject_to(eps_obs[j, k] >= 0) # Le slack non possono essere negative
+
+    # --- LINEARIZED OBSTACLE AVOIDANCE (CORRETTO) ---
+    for k in range(N+1):
+        for j in range(k_obs):
+            col_idx = k * k_obs + j
+            dp_bar = p_ego_prev[:, k] - p_obs_closest[:, col_idx]
+            dist_bar_sqr = ca.sumsqr(dp_bar)
+            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+            
+            # Qui la slack (eps_obs) funge da ammortizzatore / soft barrier
+            opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= safe_rad**2)
+    
+    # --- NEIGHBOR AVOIDANCE ---
     for j in range(num_neighbors):
         for k in range(N+1):
-            # Slice the wide matrix to get the k-th step of the j-th neighbor
-            # The column index logic: j * (N+1) + k
             col_idx = j * (N+1) + k
             dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
-            
             dist_bar_sqr = ca.sumsqr(dp_bar)
             linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
             opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
 
-    # --- Solver Choice ---
-    # Using 'qrqp' or 'osqp' but has to be installed for QP or 'ipopt' for NLP
-    # 'expand': True speeds up the solver by evaluating the graph once
     opti.solver("osqp", {"expand": True})
 
-    # Return a dictionary containing the symbolic objects to be used in the loop
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
