@@ -17,7 +17,7 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration 
+from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP 
 from utils.drones import Drone
 from optimization.optimization_plots import plot_results, animate_simulation
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 300
+    max_iter = 150
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -154,14 +154,12 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_MPC_QP(num_neighbors) # Setup with k=3 as discussed
+        vars_ = setup_MPC_NLP(num_neighbors) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         
-
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dt = 0.05 # Should match the MPC config
     dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-4
     prev_total_cost = 1e6

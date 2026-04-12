@@ -39,6 +39,9 @@ if str(SRC) not in sys.path:
 config_path = CONFIGS / "optimization_params.json"
 config = load_config(config_path)
 
+map_config = load_config(CONFIGS/"demo_parameters.json")
+bounds_cfg = map_config["map"]
+
 def setup_MPC_QP(num_neighbors): 
     # ... [Inizializzazione ROOT, SRC, config...] ...
 
@@ -114,8 +117,6 @@ def setup_MPC_QP(num_neighbors):
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
         opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
 
-    # (La dinamica complessa della batteria viene calcolata post-solve nel main)
-
     # --- PHYSICAL BOUNDS ---
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
@@ -124,7 +125,7 @@ def setup_MPC_QP(num_neighbors):
         for j in range(k_obs):
             opti.subject_to(eps_obs[j, k] >= 0) # Le slack non possono essere negative
 
-    # --- LINEARIZED OBSTACLE AVOIDANCE (CORRETTO) ---
+    # --- LINEARIZED OBSTACLE AVOIDANCE ---
     for k in range(N+1):
         for j in range(k_obs):
             col_idx = k * k_obs + j
@@ -145,6 +146,119 @@ def setup_MPC_QP(num_neighbors):
             opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
 
     opti.solver("osqp", {"expand": True})
+
+    return {
+        "opti": opti, "p": p, "a": a, "p_init": p_init, 
+        "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
+        "flag": flag, "p_ego_prev": p_ego_prev, 
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "k_search": num_regions, "k_obs": k_obs
+    }
+
+def setup_MPC_NLP(num_neighbors): 
+
+    cost_cfg = config["cost"]
+    constraints_cfg = config["constraints"]
+    mpc_cfg = config["mpc"]
+
+    w_seen = cost_cfg["w_seen"]
+    w_effort = cost_cfg["w_effort"]
+    w_batt = cost_cfg["w_battery"]
+    p_hover = cost_cfg["p_hover"]
+    z_ref = cost_cfg["z_ref"]
+    w_z = cost_cfg["w_z"] 
+    w_slack = cost_cfg["w_slack_collision"] # Peso ENORME per le collisioni
+
+    max_vel = constraints_cfg["max_speed"]
+    max_acc = constraints_cfg["max_acceleration"]
+    safe_rad = constraints_cfg["safe_distance"] 
+
+    N = mpc_cfg["prediction_horizon"]
+    dt = mpc_cfg["timestep"]
+    num_regions = mpc_cfg["k_wp_search"]
+    k_obs = mpc_cfg["k_obs_search"]
+
+    x_min, x_max = bounds_cfg["x_bounds"]
+    y_min, y_max = bounds_cfg["y_bounds"]
+    z_min, z_max = bounds_cfg["z_bounds"]
+
+    opti = ca.Opti()
+
+    # --- Variables ---
+    p = opti.variable(3, N+1)  
+    v = opti.variable(3, N+1)  
+    B = opti.variable(1, N+1)  
+    a = opti.variable(3, N)    
+    
+    # SLACK VARIABLES per evitare i minimi locali
+    eps_obs = opti.variable(k_obs, N+1)
+
+    # --- Parameters ---
+    p_init = opti.parameter(3) 
+    v_init = opti.parameter(3)
+    B_init = opti.parameter(1)
+    
+    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
+    p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
+    p_wp = opti.parameter(3, num_regions) 
+    flag = opti.parameter(num_regions)
+    p_ego_prev = opti.parameter(3, N+1)
+
+    # --- COST FUNCTION ---
+    cost = 0
+  
+    # 1. Waypoints 
+    for i in range(num_regions):
+        for k in range(1, N + 1): 
+            cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
+
+    # 2. Control Effort, Battery (Velocity), and Z-Reference Tracking
+    for k in range(N):
+        cost += w_effort * ca.sumsqr(a[:, k])
+        cost += w_batt * ca.sumsqr(v[:, k])
+        cost += w_z * ca.sumsqr(p[2, k] - z_ref) # reference height
+
+    opti.minimize(cost)
+
+    # --- DYNAMICS CONSTRAINTS ---
+    opti.subject_to(p[:, 0] == p_init)
+    opti.subject_to(v[:, 0] == v_init)
+
+    for k in range(N):
+        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
+        opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
+
+    # --- PHYSICAL BOUNDS ---
+    opti.subject_to(opti.bounded(-max_acc, a, max_acc))
+    opti.subject_to(opti.bounded(-max_vel, v, max_vel))
+    
+    # Nonlinear obstacle distance
+    for k in range(1, N+1):
+        for j in range(k_obs):
+            col_idx = k * k_obs + j
+            # Calcola la distanza esatta (non lineare) tra X,Y del drone e X,Y dell'ostacolo
+            dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+            
+            # Il vincolo puro del cerchio 
+            opti.subject_to(dist_sqr  >= safe_rad**2)
+    
+    # --- NEIGHBOR AVOIDANCE ---
+    for j in range(num_neighbors):
+        for k in range(N+1):
+            col_idx = j * (N+1) + k
+            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+            dist_bar_sqr = ca.sumsqr(dp_bar)
+            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
+    
+    # --- MAP BOUNDARIES ---
+    # Apply the bounds to every step in the prediction horizon
+    for k in range(1, N+1):
+        opti.subject_to(opti.bounded(x_min, p[0, k], x_max))
+        opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
+        opti.subject_to(opti.bounded(z_min, p[2, k], z_max))
+
+    opti.solver("ipopt", {"expand": True})
 
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
@@ -223,9 +337,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
-    
-    # ... resto della funzione (neighbor trajs e solve) ...
-    
+        
     # Neighbor trajectories: flatten (3, N+1, num_neighbors) -> (3, (N+1)*num_neighbors)
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
     opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
@@ -253,4 +365,5 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
+        cost_value = np.inf
         return np.array([0.0, 0.0, 0.0]), last_traj, cost_value
