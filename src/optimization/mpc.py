@@ -206,11 +206,25 @@ def setup_MPC_NLP(num_neighbors):
 
     # --- COST FUNCTION ---
     cost = 0
-  
+
+    # Adjust increasing priority of reaching the closest waypoint as the horizon reaches the end
+    wp_priorities = np.linspace(0.1, 1, N+1)
+
+    # Adjust priority of the waypoints in order of distance (must be length equal to num_regions)
+    # wp_priorities = [1 0.3 0.1]
+
+    # Task cost: Reach waypoints
+    for i in range(num_regions):
+        for k in range(1, N + 1): 
+            # Assegna il peso specifico in base all'ordine di vicinanza
+            weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
+            cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
+    '''
     # 1. Waypoints 
     for i in range(num_regions):
         for k in range(1, N + 1): 
             cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
+    '''
 
     # 2. Control Effort, Battery (Velocity), and Z-Reference Tracking
     for k in range(N):
@@ -269,7 +283,7 @@ def setup_MPC_NLP(num_neighbors):
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree):
+                      last_traj, neighbor_trajs, obs_tree, n_iter_mpc, t_solve_avg):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -356,14 +370,17 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
+        t_solve_avg += solve_time
+        n_iter_mpc += 1
+        t_solve_avg = t_solve_avg/n_iter_mpc
         # solver stats
         # when using ipopt 
         # solve_time = sol.stats()['t_wall_total']
         print(f"MPC solve successful: {solve_time:.4f}s") 
         
-        return optimal_accel[:, 0], new_trajectory, cost_value
+        return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
         cost_value = np.inf
-        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value
+        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value, t_solve_avg, n_iter_mpc

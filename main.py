@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 150
+    max_iter = 200
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -161,8 +161,10 @@ if __name__ == "__main__":
     # --- MAIN MPC LOOP ---
     num_iter = 0
     dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
-    dJ_thresh = 1e-4
+    dJ_thresh = 1e-6
     prev_total_cost = 1e6
+    num_iter_mpc_prev = 0
+    t_solve_avg_prev = 0
 
     while num_iter <= max_iter:
         total_loop_cost = 0 # Track sum for the whole fleet
@@ -183,10 +185,11 @@ if __name__ == "__main__":
             current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
 
             # Run MPC
-            accel, new_traj, current_cost_value = run_mpc_iteration(
+            accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree
+                drone.last_traj, neighbor_trajs_array, obs_tree, 
+                num_iter_mpc_prev, t_solve_avg_prev
             )
 
             total_loop_cost += current_cost_value
@@ -197,14 +200,18 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
         
+        '''
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
-            
+        '''    
         prev_total_cost = total_loop_cost
         num_iter += 1
+        num_iter_mpc_prev = n_iter_mpc
+        t_solve_avg_prev = t_solve_mpc
 
 print("optimization completed")
+print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
 
 # This will open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
