@@ -206,19 +206,28 @@ def setup_MPC_NLP(num_neighbors):
 
     # --- COST FUNCTION ---
     cost = 0
+    # 1. Crea il dizionario per tracciare le componenti
+    cost_components = {
+        "waypoints": 0,
+        "effort": 0,
+        "battery": 0,
+        "z_ref": 0
+    }
+
+    wp_priorities = [1.0, 0.4, 0.1] 
 
     # Adjust increasing priority of reaching the closest waypoint as the horizon reaches the end
-    wp_priorities = np.linspace(0.1, 1, N+1)
-
-    # Adjust priority of the waypoints in order of distance (must be length equal to num_regions)
-    # wp_priorities = [1 0.3 0.1]
+    # wp_priorities = np.linspace(0.1, 1, N+1)
 
     # Task cost: Reach waypoints
     for i in range(num_regions):
         for k in range(1, N + 1): 
             # Assegna il peso specifico in base all'ordine di vicinanza
             weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
-            cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
+            wp_term += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
+            # Aggiungilo al tracker e al costo totale
+            cost_components["waypoints"] += wp_term
+            cost += wp_term
     '''
     # 1. Waypoints 
     for i in range(num_regions):
@@ -226,11 +235,19 @@ def setup_MPC_NLP(num_neighbors):
             cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
     '''
 
-    # 2. Control Effort, Battery (Velocity), and Z-Reference Tracking
+       # Control Effort, Battery, and Z-Reference
     for k in range(N):
-        cost += w_effort * ca.sumsqr(a[:, k])
-        cost += w_batt * ca.sumsqr(v[:, k])
-        cost += w_z * ca.sumsqr(p[2, k] - z_ref) # reference height
+        eff_term = w_effort * ca.sumsqr(a[:, k])
+        cost_components["effort"] += eff_term
+        cost += eff_term
+        
+        batt_term = w_batt * ca.sumsqr(v[:, k])
+        cost_components["battery"] += batt_term
+        cost += batt_term
+        
+        z_term = w_z * ca.sumsqr(p[2, k] - z_ref)
+        cost_components["z_ref"] += z_term
+        cost += z_term
 
     opti.minimize(cost)
 
@@ -279,7 +296,7 @@ def setup_MPC_NLP(num_neighbors):
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
-        "k_search": num_regions, "k_obs": k_obs
+        "k_search": num_regions, "k_obs": k_obs, "cost_components": cost_components
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
@@ -291,22 +308,36 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
 
     opti = mpc_vars["opti"]
     k_limit = mpc_vars["k_search"]
-    k_obs = mpc_vars["k_obs"] # Assicurati che questo sia nel dizionario mpc_vars!
+    k_obs = mpc_vars["k_obs"] 
 
     # --- 1. WAYPOINT SEARCH ---
-    num_available = waypoint_coords.shape[0]
-    k_query = min(k_limit, num_available)
+    # Create a boolean mask of only the waypoints that have NOT been seen
+    unseen_mask = waypoint_coords[:, 2] == 0
+    active_waypoints = waypoint_coords[unseen_mask]
     
-    # Rimosso k=k_obs da qui, va solo nella query
-    wp_tree = KDTree(waypoint_coords[:, :2])
-    dist, indices = wp_tree.query(current_state["p"][:2], k=k_query)
+    num_available = active_waypoints.shape[0]
+    
+    # If there are no more active waypoints, the drone is done!
+    if num_available == 0:
+        # Feed the current position as the target so it just hovers in place smoothly
+        closest_coords_2d = np.tile(current_state["p"][:2], (k_limit, 1))
+        closest_flags = np.ones(k_limit) # Set flags to 1 so cost is 0
+    else:
+        k_query = min(k_limit, num_available)
+        
+        # Build the KDTree ONLY with the active (unseen) waypoints
+        wp_tree = KDTree(active_waypoints[:, :2])
+        dist, indices = wp_tree.query(current_state["p"][:2], k=k_query)
+        
+        if k_query == 1: 
+            indices = [indices]
+        
+        # IMPORTANT: Extract from active_waypoints, not the original waypoint_coords!
+        closest_coords_2d = active_waypoints[indices, :2]
+        closest_flags = active_waypoints[indices, 2]
     
     if k_query == 1: 
         indices = [indices]
-    
-    # Definizione corretta delle coordinate locali
-    closest_coords_2d = waypoint_coords[indices, :2]
-    closest_flags = waypoint_coords[indices, 2]
 
     # --- 2. DYNAMIC PADDING ---
     final_coords_2d = closest_coords_2d
@@ -366,6 +397,11 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
 
         # Calculate the elapsed time
         solve_time = end_time - start_time
+        
+        # 2. Valuta i singoli componenti numerici
+        comp_vals = {}
+        for name, sym_term in mpc_vars["cost_components"].items():
+            comp_vals[name] = sol.value(sym_term)
         cost_value = sol.value(mpc_vars["opti"].f)
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
@@ -378,7 +414,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         # solve_time = sol.stats()['t_wall_total']
         print(f"MPC solve successful: {solve_time:.4f}s") 
         
-        return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc
+        return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc, comp_vals
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")

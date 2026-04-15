@@ -119,7 +119,9 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 200
+    max_iter = 100
+    # Imposta ogni quante iterazioni vuoi vedere il report
+    PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
 
     # take the prediction horizon and time interval from config file
@@ -185,7 +187,7 @@ if __name__ == "__main__":
             current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
 
             # Run MPC
-            accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc = run_mpc_iteration(
+            accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc, cost_breakdown = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
                 drone.last_traj, neighbor_trajs_array, obs_tree, 
@@ -196,7 +198,7 @@ if __name__ == "__main__":
 
             # Update physics and internal logs
             drone.drone_model(accel, dt)
-            drone.check_waypoints()
+            drone.check_waypoints(dist_threshold)
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
         
@@ -209,6 +211,14 @@ if __name__ == "__main__":
         num_iter += 1
         num_iter_mpc_prev = n_iter_mpc
         t_solve_avg_prev = t_solve_mpc
+
+        if t_step % PRINT_INTERVAL == 0:
+            print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
+            print(f"Total Cost:  {current_cost_value:.2f}")
+            print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
+            print(f"  Effort:    {cost_breakdown['effort']:.2f}")
+            print(f"  Battery:   {cost_breakdown['battery']:.2f}")
+            print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
 
 print("optimization completed")
 print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
