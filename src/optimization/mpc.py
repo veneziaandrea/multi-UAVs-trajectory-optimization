@@ -294,7 +294,13 @@ def setup_MPC_NLP(num_neighbors):
         opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
         opti.subject_to(opti.bounded(z_min, p[2, k], z_max))
 
-    opti.solver("ipopt", {"expand": True})
+    opts = {
+    "print_time": False,              # Disables the 'Elapsed time' printout
+    "ipopt.print_level": 1,           # Levels 0-12 (0 is silent, 5 is default)
+    "ipopt.sb": "yes"                 # Skips the IPOPT banner
+    }
+
+    opti.solver("ipopt", {"expand": True}, opts)
 
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
