@@ -214,10 +214,15 @@ def setup_MPC_NLP(num_neighbors):
         "z_ref": 0
     }
 
-    wp_priorities = [1.0, 0.4, 0.1] 
+    # wp_priorities = [1.0, 0.4, 0.1] 
+
+    wp_term = 0
+    eff_term = 0
+    z_term = 0
+    batt_term = 0
 
     # Adjust increasing priority of reaching the closest waypoint as the horizon reaches the end
-    # wp_priorities = np.linspace(0.1, 1, N+1)
+    wp_priorities = np.linspace(0.1, 1, N+1)
 
     # Task cost: Reach waypoints
     for i in range(num_regions):

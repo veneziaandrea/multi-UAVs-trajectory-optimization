@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 100
+    max_iter = 300
     # Imposta ogni quante iterazioni vuoi vedere il report
     PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
@@ -212,7 +212,7 @@ if __name__ == "__main__":
         num_iter_mpc_prev = n_iter_mpc
         t_solve_avg_prev = t_solve_mpc
 
-        if t_step % PRINT_INTERVAL == 0:
+        if num_iter % PRINT_INTERVAL == 0:
             print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
             print(f"Total Cost:  {current_cost_value:.2f}")
             print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
