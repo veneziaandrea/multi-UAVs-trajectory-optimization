@@ -1,8 +1,8 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 2, 
-        "w_effort": 8,
+        "w_seen": 0.1, 
+        "w_effort": 10,
         "w_battery": 0,
         "p_hover": 100,
         "w_z": 0,

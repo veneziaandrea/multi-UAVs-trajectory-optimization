@@ -294,7 +294,19 @@ def setup_MPC_NLP(num_neighbors):
         opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
         opti.subject_to(opti.bounded(z_min, p[2, k], z_max))
 
-    opti.solver("ipopt", {"expand": True})
+    # CasADi Plugin Options
+    p_opts = {
+        "expand": True, 
+        "print_time": False  # Disables the CasADi 'Elapsed time' printout
+    }
+
+    # IPOPT Solver Options (NO "ipopt." prefix here!)
+    s_opts = {
+        "print_level": 0,    # Levels 0-12 (0 is silent, 5 is default)
+        "sb": "yes"          # Skips the IPOPT banner
+    }
+
+    opti.solver("ipopt", p_opts, s_opts)
 
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
@@ -302,6 +314,153 @@ def setup_MPC_NLP(num_neighbors):
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, "cost_components": cost_components
+    }
+
+def setup_test_MPC(num_neighbors=0, enable_obstacles=False): 
+    """
+    Simplified MPC setup for debugging a single drone.
+    Set enable_obstacles=False for a completely empty environment.
+    """
+    cost_cfg = config["cost"]
+    constraints_cfg = config["constraints"]
+    mpc_cfg = config["mpc"]
+
+    w_seen = cost_cfg["w_seen"]
+    w_effort = cost_cfg["w_effort"]
+    w_batt = cost_cfg["w_battery"]
+    z_ref = cost_cfg["z_ref"]
+    w_z = cost_cfg["w_z"] 
+    w_slack = cost_cfg["w_slack_collision"] 
+
+    max_vel = constraints_cfg["max_speed"]
+    max_acc = constraints_cfg["max_acceleration"]
+    safe_rad = constraints_cfg["safe_distance"] 
+
+    N = mpc_cfg["prediction_horizon"]
+    dt = mpc_cfg["timestep"]
+    num_regions = mpc_cfg["k_wp_search"]
+    k_obs = mpc_cfg["k_obs_search"]
+
+    x_min, x_max = bounds_cfg["x_bounds"]
+    y_min, y_max = bounds_cfg["y_bounds"]
+    z_min, z_max = bounds_cfg["z_bounds"]
+
+    opti = ca.Opti()
+
+    # --- Variables (Names kept identical for reusability) ---
+    p = opti.variable(3, N+1)  
+    v = opti.variable(3, N+1)  
+    B = opti.variable(1, N+1)  
+    a = opti.variable(3, N)    
+    eps_obs = opti.variable(k_obs, N+1)
+
+    # --- Parameters ---
+    p_init = opti.parameter(3) 
+    v_init = opti.parameter(3)
+    B_init = opti.parameter(1)
+    
+    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
+    p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
+    p_wp = opti.parameter(3, num_regions) 
+    flag = opti.parameter(num_regions)
+    p_ego_prev = opti.parameter(3, N+1)
+
+    # --- COST FUNCTION ---
+    cost = 0
+    cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0}
+    wp_priorities = np.linspace(0.1, 1, N+1)
+
+    # 1. Waypoints
+    for i in range(num_regions):
+        for k in range(1, N + 1): 
+            weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
+            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
+            cost_components["waypoints"] += wp_term
+            cost += wp_term
+
+    # 2. Control Effort & Z-Reference
+    for k in range(N):
+        eff_term = w_effort * ca.sumsqr(a[:, k])
+        cost_components["effort"] += eff_term
+        cost += eff_term
+        
+        z_term = w_z * ca.sumsqr(p[2, k] - z_ref)
+        cost_components["z_ref"] += z_term
+        cost += z_term
+        
+        batt_term = w_batt * ca.sumsqr(v[:, k])
+        cost_components["battery"] += batt_term
+        cost += batt_term
+
+    # 3. MICRO-PENALTIES (To prevent IPOPT from crashing on unused variables)
+    cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
+
+    if enable_obstacles:
+        slack_term = 0
+        for k in range(1, N + 1):
+            for j in range(k_obs):
+                slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
+        cost += slack_term
+        cost_components["slack"] += slack_term
+    else:
+        # If obstacles are off, eps_obs is a "ghost" variable. We give it a tiny 
+        # dummy cost so the matrix isn't singular, completely bypassing the crash.
+        cost += 1e-8 * ca.sumsqr(eps_obs)
+
+    opti.minimize(cost)
+
+    # --- DYNAMICS CONSTRAINTS ---
+    opti.subject_to(p[:, 0] == p_init)
+    opti.subject_to(v[:, 0] == v_init)
+
+    for k in range(N):
+        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
+        opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
+
+    opti.subject_to(opti.bounded(-max_acc, a, max_acc))
+    opti.subject_to(opti.bounded(-max_vel, v, max_vel))
+    
+    # --- OPTIONAL OBSTACLES ---
+    if enable_obstacles:
+        for k in range(1, N+1):
+            for j in range(k_obs):
+                opti.subject_to(eps_obs[j, k] >= 0)
+                col_idx = k * k_obs + j
+                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+    
+    # --- NEIGHBOR AVOIDANCE ---
+    # If num_neighbors == 0, this loop simply doesn't execute. Safe and clean.
+    for j in range(num_neighbors):
+        for k in range(N+1):
+            col_idx = j * (N+1) + k
+            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+            dist_bar_sqr = ca.sumsqr(dp_bar)
+            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
+    
+    # --- MAP BOUNDARIES ---
+    for k in range(1, N+1):
+        opti.subject_to(opti.bounded(x_min, p[0, k], x_max))
+        opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
+        # Note: Ensure your drone starts strictly between z_min and z_max to avoid a crash here!
+        opti.subject_to(opti.bounded(z_min, p[2, k], z_max))
+
+    opts = {
+        "print_time": False,              
+        "ipopt.print_level": 5,  # Kept at 5 so you can see if it fails          
+        "ipopt.sb": "no"                 
+    }
+
+    opti.solver("ipopt", {"expand": True}, opts)
+
+    return {
+        "opti": opti, "p": p, "a": a, "p_init": p_init, 
+        "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
+        "flag": flag, "p_ego_prev": p_ego_prev, 
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "k_search": num_regions, "k_obs": k_obs, 
+        "cost_components": cost_components, "eps_obs": eps_obs
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
@@ -417,11 +576,12 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         # solver stats
         # when using ipopt 
         # solve_time = sol.stats()['t_wall_total']
-        print(f"MPC solve successful: {solve_time:.4f}s") 
+        # print(f"MPC solve successful: {solve_time:.4f}s") 
         
         return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc, comp_vals
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
         cost_value = np.inf
-        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value, t_solve_avg, n_iter_mpc
+        fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()} 
+        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value, t_solve_avg, n_iter_mpc, fallback_components

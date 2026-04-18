@@ -17,7 +17,7 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP 
+from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC 
 from utils.drones import Drone
 from optimization.optimization_plots import plot_results, animate_simulation
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 300
+    max_iter = 50
     # Imposta ogni quante iterazioni vuoi vedere il report
     PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_MPC_NLP(num_neighbors) 
+        vars_ = setup_test_MPC(num_neighbors=0, enable_obstacles = False) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         
@@ -181,7 +181,13 @@ if __name__ == "__main__":
             
             # Collect trajectories from OTHER drones
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
-            neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
+    
+            # Explicitly check if there is at least one neighbor to stack
+            if len(neighbor_trajs) > 0:
+                neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
+            else:
+                # Fallback for solitary drone
+                neighbor_trajs_array = np.empty((3, N + 1, 0))
 
             current_flags = drone.waypoints[:, 2]      # All rows, 3rd column
             current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
