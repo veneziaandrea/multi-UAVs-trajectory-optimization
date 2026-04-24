@@ -110,6 +110,7 @@ if __name__ == "__main__":
         title="Voronoi Partition of the Workspace",
     )
 
+    
     # Extract 3D coordinates (x, y, and half the height for the z-center)
     obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
     # Create an array of radii to match the order of the tree
@@ -156,7 +157,7 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_test_MPC() 
+        vars_ = setup_test_MPC(num_neighbors=0, enable_obstacles= True) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         
@@ -225,6 +226,7 @@ if __name__ == "__main__":
             print(f"  Effort:    {cost_breakdown['effort']:.2f}")
             print(f"  Battery:   {cost_breakdown['battery']:.2f}")
             print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
+            print(f"  Barrier:     {cost_breakdown['barrier']:.2f}")
 
 print("optimization completed")
 print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")

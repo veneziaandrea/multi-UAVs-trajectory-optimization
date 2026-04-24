@@ -1,11 +1,12 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 2, 
-        "w_effort": 0,
+        "w_seen": 1, 
+        "w_effort": 10,
         "w_battery": 0,
         "w_z": 0,
-        "w_slack_collision": 1e4
+        "w_slack_collision": 0,
+        "w_barrier": 100
     },
     "constraints": {
         "max_speed": 7.0,

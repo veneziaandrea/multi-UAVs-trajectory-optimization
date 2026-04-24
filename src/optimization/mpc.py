@@ -345,6 +345,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     z_ref = cost_cfg["z_ref"]
     w_z = cost_cfg["w_z"] 
     w_slack = cost_cfg["w_slack_collision"] 
+    w_barrier = cost_cfg["w_barrier"]
 
     max_vel = constraints_cfg["max_speed"]
     max_acc = constraints_cfg["max_acceleration"]
@@ -381,7 +382,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
 
     # --- COST FUNCTION ---
     cost = 0
-    cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0}
+    cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0, "barrier": 0}
     wp_priorities = np.linspace(0.1, 1, N+1)
 
     # 1. Waypoints
@@ -401,7 +402,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
                 wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
                 cost_components["waypoints"] += wp_term
                 cost += wp_term
-                
+
     # 2. Control Effort & Z-Reference
     for k in range(N):
         eff_term = w_effort * ca.sumsqr(a[:, k])
@@ -420,12 +421,15 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
 
     if enable_obstacles:
+        pass # UNCOMMENT IF YOU WANT TO INTRODUCE SLACK VARIABLE IN COST FUNCTION FOR THE COLLISIONS
+        '''
         slack_term = 0
         for k in range(1, N + 1):
             for j in range(k_obs):
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
         cost += slack_term
         cost_components["slack"] += slack_term
+        '''
     else:
         # If obstacles are off, eps_obs is a "ghost" variable. We give it a tiny 
         # dummy cost so the matrix isn't singular, completely bypassing the crash.
@@ -446,12 +450,17 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     
     # --- OPTIONAL OBSTACLES ---
     if enable_obstacles:
+        barrier_penalty = 0
         for k in range(1, N+1):
             for j in range(k_obs):
                 opti.subject_to(eps_obs[j, k] >= 0)
                 col_idx = k * k_obs + j
                 dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
                 opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+
+                barrier_penalty = w_barrier / (dist_sqr - safe_rad**2 + 0.1)
+            cost_components["barrier"] = barrier_penalty
+            cost += barrier_penalty
     
     # --- NEIGHBOR AVOIDANCE ---
     # If num_neighbors == 0, this loop simply doesn't execute. Safe and clean.
