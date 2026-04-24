@@ -119,7 +119,6 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 50
     # Imposta ogni quante iterazioni vuoi vedere il report
     PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
@@ -130,6 +129,7 @@ if __name__ == "__main__":
     mpc_cfg = config["mpc"]
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
+    max_iter = mpc_cfg["max_iter"]
 
     # --- INITIALIZATION ---
     # Assume 'drones' is a list of objects containing 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_test_MPC(num_neighbors=0, enable_obstacles = False) 
+        vars_ = setup_test_MPC() 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         

@@ -12,7 +12,7 @@ class Drone:
 
         # If the input is [x, y], add a default Z (e.g., 0.0 or 1.0 for takeoff)
         if p_pos.size == 2:
-            p_pos = np.append(p_pos, 0.0) 
+            p_pos = np.append(p_pos, 0.1) 
 
         # Now p_pos is guaranteed to be size 3, so reshape(3,1) will work
         self.state = {

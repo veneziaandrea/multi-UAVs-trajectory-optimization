@@ -4,13 +4,13 @@
         "x_bounds": [0.0, 40.0],                
         "y_bounds": [0.0, 40.0],
         "z_bounds": [0.0, 20.0],
-        "num_obstacles": 20,
+        "num_obstacles": 3,
         "density": 0.5,
         "obstacle_radius_range": [0.5, 1.5],
         "obstacle_height_range": [4.0, 18.0]
     },
     "uav": {
-        "num_uavs": 5,
+        "num_uavs": 1,
         "max_speed": 5.0,
         "max_acceleration": 2.0,
         "altitude": 0.0,

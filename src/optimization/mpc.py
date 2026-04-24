@@ -164,7 +164,6 @@ def setup_MPC_NLP(num_neighbors):
     w_seen = cost_cfg["w_seen"]
     w_effort = cost_cfg["w_effort"]
     w_batt = cost_cfg["w_battery"]
-    p_hover = cost_cfg["p_hover"]
     z_ref = cost_cfg["z_ref"]
     w_z = cost_cfg["w_z"] 
     w_slack = cost_cfg["w_slack_collision"] # Peso ENORME per le collisioni
@@ -225,6 +224,20 @@ def setup_MPC_NLP(num_neighbors):
     wp_priorities = np.linspace(0.1, 1, N+1)
 
     # Task cost: Reach waypoints
+
+    for i in range(num_regions):
+        # Determine weight once per region (no longer inside the k-loop)
+        weight = w_seen * wp_priorities[N] if i < len(wp_priorities) else w_seen * 0.01
+        
+        # Calculate term using only the N-th timestep
+        # We use p[:, N] instead of p[:, k]
+        wp_term = (1 - flag[i]) * ca.sumsqr(p[:, N] - p_wp[:, i]) * weight
+        
+        # Add to tracker and total cost
+        cost_components["waypoints"] += wp_term
+        cost += wp_term
+    '''
+    FOR THE WHOLE TIME HORIZON CONSIDER THIS LOOP INSTEAD
     for i in range(num_regions):
         for k in range(1, N + 1): 
             # Assegna il peso specifico in base all'ordine di vicinanza
@@ -233,6 +246,7 @@ def setup_MPC_NLP(num_neighbors):
             # Aggiungilo al tracker e al costo totale
             cost_components["waypoints"] += wp_term
             cost += wp_term
+    '''
     '''
     # 1. Waypoints 
     for i in range(num_regions):
@@ -372,12 +386,22 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
 
     # 1. Waypoints
     for i in range(num_regions):
-        for k in range(1, N + 1): 
-            weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
-            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
-            cost_components["waypoints"] += wp_term
-            cost += wp_term
-
+        # 2. Task cost: Reach waypoints
+        for i in range(num_regions):
+        
+            # FIX: The Hierarchy. 
+            # i = 0 is the closest unseen waypoint. We give it 100% focus.
+            # Future waypoints in the array get 0% focus so they don't drag the drone backward.
+            target_focus = 1.0 if i == 0 else 0.0 
+        
+            for k in range(1, N + 1): 
+                # Combine the base weight, the horizon scaling, and the target focus
+                weight = w_seen * wp_priorities[k] * target_focus
+                
+                wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
+                cost_components["waypoints"] += wp_term
+                cost += wp_term
+                
     # 2. Control Effort & Z-Reference
     for k in range(N):
         eff_term = w_effort * ca.sumsqr(a[:, k])
@@ -443,16 +467,23 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     for k in range(1, N+1):
         opti.subject_to(opti.bounded(x_min, p[0, k], x_max))
         opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
-        # Note: Ensure your drone starts strictly between z_min and z_max to avoid a crash here!
-        opti.subject_to(opti.bounded(z_min, p[2, k], z_max))
+        
+        # FIX: Sink the mathematical floor so starting at Z=0 is strictly "inside" the bounds
+        opti.subject_to(opti.bounded(-0.1, p[2, k], z_max))
 
-    opts = {
-        "print_time": False,              
-        "ipopt.print_level": 5,  # Kept at 5 so you can see if it fails          
-        "ipopt.sb": "no"                 
+        # CasADi Plugin Options
+    p_opts = {
+        "expand": True, 
+        "print_time": False  # Disables the CasADi 'Elapsed time' printout
     }
 
-    opti.solver("ipopt", {"expand": True}, opts)
+    # IPOPT Solver Options (NO "ipopt." prefix here!)
+    s_opts = {
+        "print_level": 0,    # Levels 0-12 (0 is silent, 5 is default)
+        "sb": "yes"          # Skips the IPOPT banner
+    }
+
+    opti.solver("ipopt", p_opts, s_opts)
 
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
@@ -547,9 +578,17 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
         
-    # Neighbor trajectories: flatten (3, N+1, num_neighbors) -> (3, (N+1)*num_neighbors)
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
-    opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
+    
+    # Check how many columns the CasADi parameter actually expects
+    expected_cols = mpc_vars["p_neighbors"].shape[1]
+    
+    if expected_cols == 0:
+        # If the solver expects 0 neighbors (like in our test setup), feed it an empty array
+        opti.set_value(mpc_vars["p_neighbors"], np.empty((3, 0)))
+    else:
+        # Otherwise, feed it the actual neighbor data
+        opti.set_value(mpc_vars["p_neighbors"], flattened_neighbors)
 
     try:
 
