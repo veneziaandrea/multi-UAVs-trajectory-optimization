@@ -452,18 +452,24 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     if enable_obstacles:
         barrier_penalty = 0
         for k in range(1, N+1):
-            for j in range(k_obs):
-                opti.subject_to(eps_obs[j, k] >= 0)
-                col_idx = k * k_obs + j
-                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
-                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+                for j in range(k_obs):
+                    opti.subject_to(eps_obs[j, k] >= 0)
+                    col_idx = k * k_obs + j
+                    dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                    
+                    # 1. Soft Constraint
+                    opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+                    
+                    # 2. Exponential Cost Barrier
+                    # Notice we create a local variable for this specific step/obstacle
+                    step_barrier = w_barrier * ca.exp(-dist_sqr + (safe_rad * 1.5)**2)
 
-                barrier_penalty = w_barrier / (dist_sqr - safe_rad**2 + 0.1)
-            cost_components["barrier"] = barrier_penalty
-            cost += barrier_penalty
+                    # FIX: Use += to ACCUMULATE the penalty
+                    cost_components["barrier"] += step_barrier
+                    cost += step_barrier
     
     # --- NEIGHBOR AVOIDANCE ---
-    # If num_neighbors == 0, this loop simply doesn't execute. Safe and clean.
+    
     for j in range(num_neighbors):
         for k in range(N+1):
             col_idx = j * (N+1) + k

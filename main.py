@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 from scipy.spatial import KDTree
 from shapely.geometry import Polygon
+import matplotlib.pyplot as plt
 
 # Set the root directory and add the source directory to the Python path
 ROOT = Path(__file__).resolve().parent
@@ -168,7 +169,18 @@ if __name__ == "__main__":
     prev_total_cost = 1e6
     num_iter_mpc_prev = 0
     t_solve_avg_prev = 0
+    
+    # Initialize the history tracker for plot 
+    cost_history = {
+        "total": [],
+        "waypoints": [],
+        "effort": [],
+        "battery": [],
+        "z_ref": [],
+        "barrier": [] # Add any new components you defined in mpc.py
+    }
 
+    # --- MAIN MPC LOOP ---
     while num_iter <= max_iter:
         total_loop_cost = 0 # Track sum for the whole fleet
         # Check if ALL drones have finished their tasks
@@ -201,6 +213,14 @@ if __name__ == "__main__":
                 num_iter_mpc_prev, t_solve_avg_prev
             )
 
+            # Record the costs for this iteration
+            if current_cost_value != np.inf: # Don't track crashes/fallbacks
+                cost_history["total"].append(current_cost_value)
+                for key, val in cost_breakdown.items():
+                    if key not in cost_history:
+                        cost_history[key] = []
+                    cost_history[key].append(val)
+
             total_loop_cost += current_cost_value
 
             # Update physics and internal logs
@@ -230,6 +250,35 @@ if __name__ == "__main__":
 
 print("optimization completed")
 print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
+
+# --- OPTIMIZATION RECAP ---
+print("\n" + "="*40)
+print("       OPTIMIZATION COST RECAP")
+print("="*40)
+print(f"{'Component':<15} | {'Mean':<10} | {'Max':<10}")
+print("-" * 40)
+
+# Calculate and print stats
+for key, values in cost_history.items():
+    if len(values) > 0:
+        mean_val = np.mean(values)
+        max_val = np.max(values)
+        print(f"{key.capitalize():<15} | {mean_val:<10.2f} | {max_val:<10.2f}")
+
+plt.figure(figsize=(12, 6))
+for key, values in cost_history.items():
+    if len(values) > 0:
+        # Use log scale if total cost dwarfs the other components
+        plt.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
+
+plt.title("MPC Cost Components Over Time", fontsize=14)
+plt.xlabel("Iteration Step", fontsize=12)
+plt.ylabel("Cost Value (Log Scale)", fontsize=12)
+plt.yscale("log") # Log scale is highly recommended for optimization costs
+plt.grid(True, which="both", ls="--", alpha=0.5)
+plt.legend(loc="upper right")
+plt.tight_layout()
+plt.show()
 
 # This will open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
