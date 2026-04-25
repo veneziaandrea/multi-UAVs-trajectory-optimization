@@ -20,7 +20,7 @@ from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC 
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
 
 def build_demo(config): 
     # Load environment configuration
@@ -282,9 +282,11 @@ plt.show()
 
 # This will open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
+
+plot_kinematics(drones, dt)
 # 2. 2D Animation
 
-# This will show the "movie" of the drones dodging obstacles
+# This will show the "movie" of the drones moving
 config_path = ROOT / "configs" / "demo_parameters.json"
 config = load_config(config_path)
 map_cfg = config["map"]

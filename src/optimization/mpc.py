@@ -476,9 +476,15 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
                     # 1. Soft Constraint
                     opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
                     
-                    # 2. Exponential Cost Barrier
-                    # Notice we create a local variable for this specific step/obstacle
-                    step_barrier = w_barrier * ca.exp(-dist_sqr + (safe_rad * 1.5)**2)
+                    # 2. The Exponential Forcefield
+                    # 'shape_factor' controls how WIDE the forcefield is. 
+                    # Higher number = wider, softer warning track. Lower = tighter, sharper wall.
+                    shape_factor = cost_cfg["shape_factor"]
+                    
+                    # Formula: e^( (safe_rad^2 - dist_sqr) / shape_factor )
+                    # As dist_sqr approaches safe_rad^2, the exponent becomes 0, so exp(0) = 1.
+                    # The penalty at the exact boundary is exactly equal to w_barrier.
+                    step_barrier = w_barrier * ca.exp((safe_rad**2 - dist_sqr) / shape_factor)
 
                     # FIX: Use += to ACCUMULATE the penalty
                     cost_components["barrier"] += step_barrier
