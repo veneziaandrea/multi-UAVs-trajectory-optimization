@@ -170,6 +170,7 @@ if __name__ == "__main__":
     dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
+    ego_accel_prev = 0
     num_iter_mpc_prev = 0
     t_solve_avg_prev = 0
     
@@ -212,7 +213,7 @@ if __name__ == "__main__":
                 
                 if dist_to_home < dist_threshold:
                     print(f"Drone {drone.id} has parked safely!")
-                    drone.is_parked = True # Synced variable name
+                    drone.is_parked = True 
 
             # 3. THE BYPASS
             if drone.is_parked:
@@ -270,7 +271,7 @@ if __name__ == "__main__":
                 print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
                 print(f"  Effort:    {cost_breakdown['effort']:.2f}")
                 print(f"  Battery:   {cost_breakdown['battery']:.2f}")
-                print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
+                print(f"  Slack:     {cost_breakdown['slack']:.2f}")
                 print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
         
        

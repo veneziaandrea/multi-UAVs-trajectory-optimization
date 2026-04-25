@@ -5,7 +5,7 @@
         "w_effort": 2,
         "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 0,
+        "w_slack_collision": 1e6,
         "w_barrier": 7, 
         "shape_factor": 1.1
     },

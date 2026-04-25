@@ -437,15 +437,14 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
 
     if enable_obstacles:
-        pass # UNCOMMENT IF YOU WANT TO INTRODUCE SLACK VARIABLE IN COST FUNCTION FOR THE COLLISIONS
-        '''
+        # pass # UNCOMMENT IF YOU WANT TO AVOID SLACK VARIABLE IN COST FUNCTION FOR THE COLLISIONS
         slack_term = 0
         for k in range(1, N + 1):
             for j in range(k_obs):
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
         cost += slack_term
         cost_components["slack"] += slack_term
-        '''
+        
     else:
         # If obstacles are off, eps_obs is a "ghost" variable. We give it a tiny 
         # dummy cost so the matrix isn't singular, completely bypassing the crash.
