@@ -5,7 +5,7 @@
         "w_effort": 2,
         "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 1e6,
+        "w_slack_collision": 1000,
         "w_barrier": 7, 
         "shape_factor": 1.1
     },
@@ -19,6 +19,6 @@
         "timestep": 0.05,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 4000
+        "max_iter": 300
     }
 }

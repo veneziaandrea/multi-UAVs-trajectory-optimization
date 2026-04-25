@@ -369,6 +369,8 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     a = opti.variable(3, N)    
     eps_obs = opti.variable(k_obs, N+1)
 
+    opti.set_initial(eps_obs, 0.01)
+
     # --- Parameters ---
     p_init = opti.parameter(3) 
     v_init = opti.parameter(3)
@@ -436,51 +438,46 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     # 3. MICRO-PENALTIES (To prevent IPOPT from crashing on unused variables)
     cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
 
+    # --- OBSTACLES (Slack Cost, Barrier Cost, & Constraints) ---
     if enable_obstacles:
-        # pass # UNCOMMENT IF YOU WANT TO AVOID SLACK VARIABLE IN COST FUNCTION FOR THE COLLISIONS
         slack_term = 0
-        for k in range(1, N + 1):
+        step_barrier = 0
+        
+        for k in range(1, N+1):
             for j in range(k_obs):
+                # 1. Slack Cost (L1 Linear)
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
+                
+                # 2. Hard Constraints & Soft Escape
+                # opti.subject_to(eps_obs[j, k] >= 0)
+                col_idx = k * k_obs + j
+                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+                
+                # 3. Exponential Barrier
+                shape_factor = cost_cfg["shape_factor"]
+                step_barrier_val = w_barrier * ca.exp((safe_rad**2 - dist_sqr) / shape_factor)
+                step_barrier += step_barrier_val
+
+        # Add everything to the total cost once the loop finishes
         cost += slack_term
         cost_components["slack"] += slack_term
         
+        cost += step_barrier
+        cost_components["barrier"] += step_barrier
+        
     else:
-        # If obstacles are off, eps_obs is a "ghost" variable. We give it a tiny 
-        # dummy cost so the matrix isn't singular, completely bypassing the crash.
+        # Dummy cost to prevent singular matrices
         cost += 1e-8 * ca.sumsqr(eps_obs)
-
-        # --- OPTIONAL OBSTACLES ---
-    if enable_obstacles:
-        step_barrier = 0
-        for k in range(1, N+1):
-            for j in range(k_obs):
-                opti.subject_to(eps_obs[j, k] >= 0)
-                col_idx = k * k_obs + j
-                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
-                
-                # 1. Soft Constraint
-                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
-                
-                # 2. The Exponential Forcefield
-                # 'shape_factor' controls how WIDE the forcefield is. 
-                # Higher number = wider, softer warning track. Lower = tighter, sharper wall.
-                shape_factor = cost_cfg["shape_factor"]
-                
-                # Formula: e^( (safe_rad^2 - dist_sqr) / shape_factor )
-                # As dist_sqr approaches safe_rad^2, the exponent becomes 0, so exp(0) = 1.
-                # The penalty at the exact boundary is exactly equal to w_barrier.
-                step_barrier = w_barrier * ca.exp((safe_rad**2 - dist_sqr) / shape_factor)
-
-                # FIX: Use += to ACCUMULATE the penalty
-                cost_components["barrier"] += step_barrier
-                cost += step_barrier
     
     opti.minimize(cost)
 
     # --- DYNAMICS CONSTRAINTS ---
     opti.subject_to(p[:, 0] == p_init)
     opti.subject_to(v[:, 0] == v_init)
+
+    #slack variable must be positive
+    opti.subject_to(ca.vec(eps_obs) >= 0)
 
     for k in range(N):
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
@@ -489,7 +486,9 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
 
-            # --- OPTIONAL OBSTACLES ---
+    # --- OPTIONAL OBSTACLES ---
+    # UNCOMMENT IF SLACK VARIABLE FOR OBSTACLES ARE REMOVED
+    '''
     if enable_obstacles:
         for k in range(1, N+1):
             for j in range(k_obs):
@@ -499,7 +498,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
                 
                 # 1. Soft Constraint
                 opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
-    
+    '''
     # --- NEIGHBOR AVOIDANCE ---
     
     for j in range(num_neighbors):
