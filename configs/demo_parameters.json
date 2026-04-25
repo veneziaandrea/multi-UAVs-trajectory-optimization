@@ -10,7 +10,7 @@
         "obstacle_height_range": [4.0, 18.0]
     },
     "uav": {
-        "num_uavs": 1,
+        "num_uavs": 5,
         "max_speed": 5.0,
         "max_acceleration": 2.0,
         "altitude": 0.0,

@@ -16,4 +16,7 @@ Blocked at the waypoint just below the obstacle of the cluster in the map
 SETUP 3) 
 w_barrier 7
 shape factor 1.1
+A bit better obstacle-wise but not trajectory, it does some random loop instead of "normal turns"
+
+FROM NOW ON THE PENALIZED EFFORT WILL BE ON THE JERK AND NOT THE ACCELERATIONS
 

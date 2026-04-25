@@ -161,6 +161,9 @@ if __name__ == "__main__":
         vars_ = setup_test_MPC(num_neighbors=0, enable_obstacles= True) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
+        new_drone.returning_home = False
+        new_drone.is_parked = False
+        new_drone.home_pos = drone_positions[id_d]
         
     # --- MAIN MPC LOOP ---
     num_iter = 0
@@ -180,30 +183,60 @@ if __name__ == "__main__":
         "barrier": [] 
     }
 
-    # --- MAIN MPC LOOP ---
+   # --- MAIN MPC LOOP ---
     while num_iter <= max_iter:
         total_loop_cost = 0 # Track sum for the whole fleet
-        # Check if ALL drones have finished their tasks
+        
+        # Check if ALL drones have finished their tasks (including the RTH waypoint)
         all_done = all(np.all(d.waypoints[:, 2] == 1.0) for d in drones)
-        
         if all_done:
-            print(f"Mission accomplished in {num_iter} steps!")
+            print(f"\nMission accomplished in {num_iter} steps!")
             break
+
+        # ONE UNIFIED LOOP FOR ALL LOGIC
+        for i, drone in enumerate(drones):
+            
+            # 1. Check if regular mission is done
+            unseen_mask = drone.waypoints[:, 2] == 0
+            if not np.any(unseen_mask) and not drone.returning_home:
+                print(f"Drone {drone.id} finished mission! Returning to home.")
+                
+                # Append home position to the waypoints array [x, y, 0 (unseen flag)]
+                home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
+                drone.waypoints = np.vstack([drone.waypoints, home_wp])
+                drone.returning_home = True
         
-        for drone in drones:
+            # 2. Check if drone has arrived at home
+            if drone.returning_home and not drone.is_parked:
+                dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
+                
+                if dist_to_home < dist_threshold:
+                    print(f"Drone {drone.id} has parked safely!")
+                    drone.is_parked = True # Synced variable name
+
+            # 3. THE BYPASS
+            if drone.is_parked:
+                drone.state["v"] = np.zeros(3)
+                drone.state["last_accel"] = np.zeros(3)
+                
+                N = drone.mpc_vars["opti"].value(drone.mpc_vars["p"]).shape[1] - 1
+                stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
+                drone.last_traj = stationary_traj
+                
+                drone.history_p.append(drone.state["p"].copy())
+                drone.history_a.append(np.zeros(3))
+                
+                continue # Safely skips the MPC block below and moves to the next drone!
+            
+            # --- 4. RUN MPC FOR ACTIVE DRONES ---
             
             # Collect trajectories from OTHER drones
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
     
-            # Explicitly check if there is at least one neighbor to stack
             if len(neighbor_trajs) > 0:
                 neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
             else:
-                # Fallback for solitary drone
                 neighbor_trajs_array = np.empty((3, N + 1, 0))
-
-            current_flags = drone.waypoints[:, 2]      # All rows, 3rd column
-            current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
 
             # Run MPC
             accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc, cost_breakdown = run_mpc_iteration(
@@ -213,11 +246,8 @@ if __name__ == "__main__":
                 num_iter_mpc_prev, t_solve_avg_prev
             )
 
-            # Log the true solver output
-            drone.history_a.append(accel)
-
             # Record the costs for this iteration
-            if current_cost_value != np.inf: # Don't track crashes/fallbacks
+            if current_cost_value != np.inf: 
                 cost_history["total"].append(current_cost_value)
                 for key, val in cost_breakdown.items():
                     if key not in cost_history:
@@ -231,26 +261,30 @@ if __name__ == "__main__":
             drone.check_waypoints(dist_threshold)
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
+            drone.history_a.append(accel)
+
+            if num_iter % PRINT_INTERVAL == 0:
+
+                print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
+                print(f"Total Cost:  {current_cost_value:.2f}")
+                print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
+                print(f"  Effort:    {cost_breakdown['effort']:.2f}")
+                print(f"  Battery:   {cost_breakdown['battery']:.2f}")
+                print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
+                print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
         
+       
         
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
-           
+            
         prev_total_cost = total_loop_cost
         num_iter += 1
         num_iter_mpc_prev = n_iter_mpc
         t_solve_avg_prev = t_solve_mpc
 
-        if num_iter % PRINT_INTERVAL == 0:
-            print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
-            print(f"Total Cost:  {current_cost_value:.2f}")
-            print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
-            print(f"  Effort:    {cost_breakdown['effort']:.2f}")
-            print(f"  Battery:   {cost_breakdown['battery']:.2f}")
-            print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
-            print(f"  Barrier:     {cost_breakdown['barrier']:.2f}")
-
+# --- END MPC LOOP ---
 
 print("optimization completed")
 print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")

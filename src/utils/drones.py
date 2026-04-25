@@ -6,6 +6,8 @@ class Drone:
 
         self.mpc_vars = mpc_vars
 
+        self.home_pos = start_pos
+
         self.waypoints = np.atleast_2d(waypoints) # waypoints will be (N, 3)
         # Convert input to numpy array
         p_pos = np.array(start_pos, dtype=float).flatten()
@@ -23,11 +25,14 @@ class Drone:
 
         self.last_traj = np.tile(self.state["p"].reshape(3, 1), (1, horizon_n + 1))
     
-        
         # Telemetry history for plotting
         self.history_p = []
         self.history_predictions = []
         self.history_a = []
+
+        # flags to consider return to home and end of task 
+        self.returning_home = False
+        self.is_parked = False
 
     def drone_model(self, accel, dt):
         """

@@ -395,7 +395,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
         for k in range(1, N + 1): 
             # Assegna il peso specifico in base all'ordine di vicinanza
             weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
-            wp_term += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus
+            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus
             # Aggiungilo al tracker e al costo totale
             cost_components["waypoints"] += wp_term
             cost += wp_term
@@ -553,6 +553,9 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     k_limit = mpc_vars["k_search"]
     k_obs = mpc_vars["k_obs"] 
 
+    # needed inizialization if no obstacles are detected for the waypoint kd tree
+    k_query = 0
+
     # --- 1. WAYPOINT SEARCH ---
     # Create a boolean mask of only the waypoints that have NOT been seen
     unseen_mask = waypoint_coords[:, 2] == 0
@@ -565,6 +568,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         # Feed the current position as the target so it just hovers in place smoothly
         closest_coords_2d = np.tile(current_state["p"][:2], (k_limit, 1))
         closest_flags = np.ones(k_limit) # Set flags to 1 so cost is 0
+        k_query = k_limit
     else:
         k_query = min(k_limit, num_available)
         
