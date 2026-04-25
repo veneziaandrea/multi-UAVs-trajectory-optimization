@@ -32,6 +32,18 @@ they are crawling (like max 1.5 m/s speed) but everyone avoids obstacles and has
 Setup 5) 
 same as above but w seen 1.5
 
+moving slowly but faster, collisions only when the next waypoint is far away behind an obstacle: couldn't slow down fast enough and entered inside it. trying to augment the shape factor to 1.2; 
+
+Setup 6) 
+same as 5 but shape factor 1.2
+
+worse collision avoidance somehow but no drone stuck
+
+Setup 7) 
+shape factor 1.2
+barrier 7.25
+w seen 1.25
+
 
 
 FROM NOW ON THE PENALIZED EFFORT WILL BE ON THE JERK AND NOT THE ACCELERATIONS

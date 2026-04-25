@@ -93,21 +93,28 @@ def animate_simulation(drones, obstacles, map_limits):
         for drone in drones:
             if frame < len(drone.history_p):
                 pos = drone.history_p[frame]
-                pred = drone.history_predictions[frame]
                 
                 # Drone body
                 ax.plot(pos[0], pos[1], 'ko', markersize=6)
+                
+                # --- NEW: Safely fetch the prediction ---
+                if frame < len(drone.history_predictions):
+                    pred = drone.history_predictions[frame]
+                elif len(drone.history_predictions) > 0:
+                    # If we run out of predictions, just show the final parked one
+                    pred = drone.history_predictions[-1] 
+                else:
+                    pred = None
+                
                 # The "Look Ahead" line from MPC
-                ax.plot(pred[0, :], pred[1, :], color='blue', linestyle='--', alpha=0.4)
+                if pred is not None:
+                    ax.plot(pred[0, :], pred[1, :], color='blue', linestyle='--', alpha=0.4)
                 
         ax.set_title(f"Time Step: {frame}")
 
     max_frames = max(len(d.history_p) for d in drones)
     ani = animation.FuncAnimation(fig, update, frames=max_frames, interval=50)
     plt.show()
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 def plot_kinematics(drones, dt):
     """
@@ -150,4 +157,3 @@ def plot_kinematics(drones, dt):
                 ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
                             label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
                 ax2.set_title("Drone Acceleration Profile", fontsize = 14)
-                

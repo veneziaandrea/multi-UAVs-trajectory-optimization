@@ -189,12 +189,11 @@ if __name__ == "__main__":
         total_loop_cost = 0 # Track sum for the whole fleet
         
         # Check if ALL drones have finished their tasks (including the RTH waypoint)
-        all_done = all(np.all(d.waypoints[:, 2] == 1.0) for d in drones)
+        all_done = all_done = all(d.is_parked for d in drones)
         if all_done:
             print(f"\nMission accomplished in {num_iter} steps!")
             break
 
-        # ONE UNIFIED LOOP FOR ALL LOGIC
         for i, drone in enumerate(drones):
             
             # 1. Check if regular mission is done
@@ -226,6 +225,9 @@ if __name__ == "__main__":
                 
                 drone.history_p.append(drone.state["p"].copy())
                 drone.history_a.append(np.zeros(3))
+
+                if hasattr(drone, 'history_predictions'):
+                    drone.history_predictions.append(stationary_traj)
                 
                 continue # Safely skips the MPC block below and moves to the next drone!
             
