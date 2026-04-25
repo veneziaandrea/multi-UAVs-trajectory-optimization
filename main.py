@@ -217,7 +217,7 @@ if __name__ == "__main__":
             # 3. THE BYPASS
             if drone.is_parked:
                 drone.state["v"] = np.zeros(3)
-                drone.state["last_accel"] = np.zeros(3)
+                drone.state["a"] = np.zeros(3)
                 
                 N = drone.mpc_vars["opti"].value(drone.mpc_vars["p"]).shape[1] - 1
                 stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
@@ -265,6 +265,8 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
             drone.history_a.append(accel)
+            # NEW: Save the applied acceleration so the next loop can calculate Jerk
+            drone.state["a"] = accel
 
             if num_iter % PRINT_INTERVAL == 0:
 

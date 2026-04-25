@@ -20,6 +20,7 @@ class Drone:
         self.state = {
             "p": p_pos,
             "v": np.zeros(3),
+            "a": np.zeros(3),
             "B": 100.0
         }
 

@@ -44,7 +44,13 @@ shape factor 1.2
 barrier 7.25
 w seen 1.25
 
+nothing really changed
 
-
+OBSERVATION: the input is often an instantanuos spike of accelerations at maximum 
 FROM NOW ON THE PENALIZED EFFORT WILL BE ON THE JERK AND NOT THE ACCELERATIONS
+
+Setup 1)
+w seen 1.25
+w effort 0.5
+barrier function params as setup 7
 

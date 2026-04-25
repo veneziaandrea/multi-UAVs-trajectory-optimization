@@ -202,6 +202,7 @@ def setup_MPC_NLP(num_neighbors):
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
     p_ego_prev = opti.parameter(3, N+1)
+    accel_ego_prev = opti.parameter(3, N+1)
 
     # --- COST FUNCTION ---
     cost = 0
@@ -325,7 +326,7 @@ def setup_MPC_NLP(num_neighbors):
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
-        "flag": flag, "p_ego_prev": p_ego_prev, 
+        "flag": flag, "p_ego_prev": p_ego_prev, "a_ego_prev": accel_ego_prev,
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, "cost_components": cost_components
     }
@@ -381,6 +382,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
     p_ego_prev = opti.parameter(3, N+1)
+    a_ego_prev = opti.parameter(3)
 
     # --- COST FUNCTION ---
     cost = 0
@@ -421,9 +423,17 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
         cost_components["waypoints"] += wp_term
             cost += wp_term
         '''
-    # 2. Control Effort & Z-Reference
+
+    # 2. Control Effort AKA Jerk & Z-Reference & Battery
     for k in range(N):
-        eff_term = w_effort * ca.sumsqr(a[:, k])
+        
+        # --- JERK MATH ---
+        if k == 0:
+            jerk = a[:, 0] - a_ego_prev
+        else:
+            jerk = a[:, k] - a[:, k-1]
+            
+        eff_term = w_effort * ca.sumsqr(jerk)
         cost_components["effort"] += eff_term
         cost += eff_term
         
@@ -535,6 +545,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
+        "a_ego_prev": a_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, 
         "cost_components": cost_components, "eps_obs": eps_obs
@@ -627,6 +638,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
+    opti.set_value(mpc_vars["a_ego_prev"], current_state["a"])
         
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
     
