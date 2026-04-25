@@ -27,6 +27,7 @@ class Drone:
         # Telemetry history for plotting
         self.history_p = []
         self.history_predictions = []
+        self.history_a = []
 
     def drone_model(self, accel, dt):
         """

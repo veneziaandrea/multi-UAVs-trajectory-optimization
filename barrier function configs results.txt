@@ -1,0 +1,19 @@
+NB: don't do w_barrier > 8 and shape_factor > 2 for sure
+NB 2: w_effort > 2 leads to "boomerang" effect / less effective control action
+NB 3: if not explicitily stated, w_effort is always 2
+
+SETUP 1)
+w_barrier = 7
+shape_factor = 1 
+w_effort = 2
+Clips some obstacles but overall well; 
+
+SETUP 2) 
+w_barrier 7
+shape factor 1.25
+Blocked at the waypoint just below the obstacle of the cluster in the map 
+
+SETUP 3) 
+w_barrier 7
+shape factor 1.1
+

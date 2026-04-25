@@ -177,7 +177,7 @@ if __name__ == "__main__":
         "effort": [],
         "battery": [],
         "z_ref": [],
-        "barrier": [] # Add any new components you defined in mpc.py
+        "barrier": [] 
     }
 
     # --- MAIN MPC LOOP ---
@@ -212,6 +212,9 @@ if __name__ == "__main__":
                 drone.last_traj, neighbor_trajs_array, obs_tree, 
                 num_iter_mpc_prev, t_solve_avg_prev
             )
+
+            # Log the true solver output
+            drone.history_a.append(accel)
 
             # Record the costs for this iteration
             if current_cost_value != np.inf: # Don't track crashes/fallbacks
