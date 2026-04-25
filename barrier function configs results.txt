@@ -44,7 +44,7 @@ shape factor 1.2
 barrier 7.25
 w seen 1.25
 
-nothing really changed
+nothing really changed, drones slower between near waypoints especially if near obstacles
 
 OBSERVATION: the input is often an instantanuos spike of accelerations at maximum 
 FROM NOW ON THE PENALIZED EFFORT WILL BE ON THE JERK AND NOT THE ACCELERATIONS
@@ -53,4 +53,17 @@ Setup 1)
 w seen 1.25
 w effort 0.5
 barrier function params as setup 7
+
+drones go REALLY slowly when near to waypoints, effort weight must be reduced i think; like they take 50 iterations to reach it when less than a meter away.
+however, accelerations still look a bit too twitchy.
+trajectory planning waypoint oder changed wrt the previous formulation for a couple of drones.
+
+Setup 2) 
+w seen 1.5 to incentivise speed near waypoints
+w effort 1 to smooth inputs for real hopefully
+w battery 1.5 to counteract w seen on far waypoints hopefully
+w barrier 7.5 to avoid collisions at faster speeds hopefully
+shape factor 1.2
+
+
 
