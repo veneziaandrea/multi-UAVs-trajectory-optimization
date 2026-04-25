@@ -2,21 +2,37 @@ NB: don't do w_barrier > 8 and shape_factor > 2 for sure
 NB 2: w_effort > 2 leads to "boomerang" effect / less effective control action
 NB 3: if not explicitily stated, w_effort is always 2
 
-SETUP 1)
+Setup 1)
 w_barrier = 7
 shape_factor = 1 
 w_effort = 2
 Clips some obstacles but overall well; 
 
-SETUP 2) 
+Setup 2) 
 w_barrier 7
 shape factor 1.25
 Blocked at the waypoint just below the obstacle of the cluster in the map 
 
-SETUP 3) 
+Setup 3) 
 w_barrier 7
 shape factor 1.1
 A bit better obstacle-wise but not trajectory, it does some random loop instead of "normal turns"
+
+NB: w_slack > 500 will make the solver agonizingly slow
+
+Setup 4) 
+WITH SOFT CONSTRAINTS
+w_slack 500
+w seen 0.5
+w battery 1
+w effort 2
+
+they are crawling (like max 1.5 m/s speed) but everyone avoids obstacles and has super clean trajectories
+
+Setup 5) 
+same as above but w seen 1.5
+
+
 
 FROM NOW ON THE PENALIZED EFFORT WILL BE ON THE JERK AND NOT THE ACCELERATIONS
 
