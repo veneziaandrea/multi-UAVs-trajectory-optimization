@@ -2,11 +2,11 @@
     "cost": {
         "z_ref": 5.0, 
         "w_seen": 0.5, 
-        "w_effort": 10,
-        "w_battery": 0,
+        "w_effort": 2,
+        "w_battery": 1,
         "w_z": 0,
         "w_slack_collision": 0,
-        "w_barrier": 3
+        "w_barrier": 100
     },
     "constraints": {
         "max_speed": 7.0,
@@ -17,7 +17,7 @@
         "prediction_horizon": 20,
         "timestep": 0.05,
         "k_wp_search": 3,
-        "k_obs_search": 2, 
+        "k_obs_search": 5, 
         "max_iter": 2000
     }
 }

@@ -105,3 +105,53 @@ def animate_simulation(drones, obstacles, map_limits):
     max_frames = max(len(d.history_p) for d in drones)
     ani = animation.FuncAnimation(fig, update, frames=max_frames, interval=50)
     plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_kinematics(drones, dt):
+    """
+    Plots the velocity and acceleration profiles of the drones over time,
+    displaying their average values in the legend.
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    colors = ['blue', 'green', 'magenta', 'cyan', 'orange']
+
+    for i, drone in enumerate(drones):
+        path = np.array(drone.history_p)
+        
+        # Need at least 3 points to calculate acceleration
+        if len(path) > 2:
+            # 1. Calculate Velocity (Derivative of Position)
+            velocities = np.diff(path, axis=0) / dt
+            v_mag = np.linalg.norm(velocities, axis=1)
+            time_v = np.arange(len(v_mag)) * dt
+            avg_v = np.mean(v_mag)
+            
+            ax1.plot(time_v, v_mag, color=colors[i % len(colors)], linewidth=2,
+                     label=f'Drone {drone.id} (Avg: {avg_v:.2f} m/s)')
+
+            # 2. Calculate Acceleration (Derivative of Velocity)
+            accelerations = np.diff(velocities, axis=0) / dt
+            a_mag = np.linalg.norm(accelerations, axis=1)
+            time_a = np.arange(len(a_mag)) * dt
+            avg_a = np.mean(a_mag)
+            
+            ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
+                     label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
+
+    # Formatting Velocity Plot
+    ax1.set_title("Drone Velocity Profile", fontsize=14)
+    ax1.set_ylabel("Velocity Magnitude [m/s]", fontsize=12)
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.legend(loc="upper right")
+
+    # Formatting Acceleration Plot
+    ax2.set_title("Drone Acceleration Profile", fontsize=14)
+    ax2.set_xlabel("Time [s]", fontsize=12)
+    ax2.set_ylabel("Acceleration Magnitude [m/s²]", fontsize=12)
+    ax2.grid(True, which="both", ls="--", alpha=0.5)
+    ax2.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()

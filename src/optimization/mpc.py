@@ -248,7 +248,7 @@ def setup_MPC_NLP(num_neighbors):
             cost += wp_term
     '''
     '''
-    # 1. Waypoints 
+    TO WEIGH EACH STEP WITH THE SAME PENALTY CONSIDER THIS LOOP
     for i in range(num_regions):
         for k in range(1, N + 1): 
             cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
@@ -386,23 +386,39 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     wp_priorities = np.linspace(0.1, 1, N+1)
 
     # 1. Waypoints
-    for i in range(num_regions):
-        # 2. Task cost: Reach waypoints
-        for i in range(num_regions):
-        
-            # FIX: The Hierarchy. 
-            # i = 0 is the closest unseen waypoint. We give it 100% focus.
-            # Future waypoints in the array get 0% focus so they don't drag the drone backward.
-            target_focus = 1.0 if i == 0 else 0.0 
-        
-            for k in range(1, N + 1): 
-                # Combine the base weight, the horizon scaling, and the target focus
-                weight = w_seen * wp_priorities[k] * target_focus
-                
-                wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight
-                cost_components["waypoints"] += wp_term
-                cost += wp_term
 
+    for i in range(num_regions):
+        # i = 0 is the closest unseen waypoint. We give it 100% focus.
+        # Future waypoints in the array get 0% focus so they don't drag the drone backward.
+        target_focus = 1.0 if i == 0 else 0.0
+        wp_term = 0 
+        for k in range(1, N + 1): 
+            # Assegna il peso specifico in base all'ordine di vicinanza
+            weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
+            wp_term += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus
+            # Aggiungilo al tracker e al costo totale
+            cost_components["waypoints"] += wp_term
+            cost += wp_term
+    '''
+    UNCOMMENT THIS TO USE TERMINAL COST INSTEAD OF RUNNING + PENALTY TO GET TO THE WAYPOINT INCREASING IN THE HORIZON 
+    for i in range(num_regions):
+    
+        # FIX: The Hierarchy. 
+        # i = 0 is the closest unseen waypoint. We give it 100% focus.
+        # Future waypoints in the array get 0% focus so they don't drag the drone backward.
+        target_focus = 1.0 if i == 0 else 0.0 
+    
+                # Determine weight once per region (no longer inside the k-loop)
+        weight = w_seen * wp_priorities[N] if i < len(wp_priorities) else w_seen * 0.01
+        
+        # Calculate term using only the N-th timestep
+        # We use p[:, N] instead of p[:, k]
+        wp_term = (1 - flag[i]) * ca.sumsqr(p[:, N] - p_wp[:, i]) * weight * target_focus
+    
+        # Add to tracker and total cost
+        cost_components["waypoints"] += wp_term
+            cost += wp_term
+        '''
     # 2. Control Effort & Z-Reference
     for k in range(N):
         eff_term = w_effort * ca.sumsqr(a[:, k])
@@ -450,7 +466,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     
     # --- OPTIONAL OBSTACLES ---
     if enable_obstacles:
-        barrier_penalty = 0
+        step_barrier = 0
         for k in range(1, N+1):
                 for j in range(k_obs):
                     opti.subject_to(eps_obs[j, k] >= 0)
