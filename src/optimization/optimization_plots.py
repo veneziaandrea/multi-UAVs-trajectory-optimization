@@ -149,3 +149,5 @@ def plot_kinematics(drones, dt):
                 
                 ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
                             label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
+                ax2.set_title("Drone Acceleration Profile", fontsize = 14)
+                

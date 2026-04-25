@@ -476,7 +476,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     opti.subject_to(p[:, 0] == p_init)
     opti.subject_to(v[:, 0] == v_init)
 
-    #slack variable must be positive
+    #slack variables must be positive
     opti.subject_to(ca.vec(eps_obs) >= 0)
 
     for k in range(N):
