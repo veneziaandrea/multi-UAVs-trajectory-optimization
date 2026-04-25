@@ -65,5 +65,8 @@ w battery 1.5 to counteract w seen on far waypoints hopefully
 w barrier 7.5 to avoid collisions at faster speeds hopefully
 shape factor 1.2
 
+drones now slow down way too much, near waypoints, it's worse than before. i will turn down again w battery; 
+collision avoidance is better but not completely fault less still. accelerations are again not smooth. the avg solve time increased to almost 2 seconds.
+
 
 

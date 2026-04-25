@@ -2,8 +2,8 @@
     "cost": {
         "z_ref": 5.0, 
         "w_seen": 1.5, 
-        "w_effort": 0.75,
-        "w_battery": 1.25,
+        "w_effort": 0.25,
+        "w_battery": 1,
         "w_z": 0,
         "w_slack_collision": 500,
         "w_barrier": 7.5, 

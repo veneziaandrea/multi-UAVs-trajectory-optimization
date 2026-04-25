@@ -199,7 +199,7 @@ if __name__ == "__main__":
             # 1. Check if regular mission is done
             unseen_mask = drone.waypoints[:, 2] == 0
             if not np.any(unseen_mask) and not drone.returning_home:
-                print(f"Drone {drone.id} finished mission! Returning to home.")
+                print(f"Drone {drone.id} finished mission! Returning home.")
                 
                 # Append home position to the waypoints array [x, y, 0 (unseen flag)]
                 home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
