@@ -451,6 +451,32 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
         # dummy cost so the matrix isn't singular, completely bypassing the crash.
         cost += 1e-8 * ca.sumsqr(eps_obs)
 
+        # --- OPTIONAL OBSTACLES ---
+    if enable_obstacles:
+        step_barrier = 0
+        for k in range(1, N+1):
+            for j in range(k_obs):
+                opti.subject_to(eps_obs[j, k] >= 0)
+                col_idx = k * k_obs + j
+                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                
+                # 1. Soft Constraint
+                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+                
+                # 2. The Exponential Forcefield
+                # 'shape_factor' controls how WIDE the forcefield is. 
+                # Higher number = wider, softer warning track. Lower = tighter, sharper wall.
+                shape_factor = cost_cfg["shape_factor"]
+                
+                # Formula: e^( (safe_rad^2 - dist_sqr) / shape_factor )
+                # As dist_sqr approaches safe_rad^2, the exponent becomes 0, so exp(0) = 1.
+                # The penalty at the exact boundary is exactly equal to w_barrier.
+                step_barrier = w_barrier * ca.exp((safe_rad**2 - dist_sqr) / shape_factor)
+
+                # FIX: Use += to ACCUMULATE the penalty
+                cost_components["barrier"] += step_barrier
+                cost += step_barrier
+    
     opti.minimize(cost)
 
     # --- DYNAMICS CONSTRAINTS ---
@@ -463,32 +489,17 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
 
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
-    
-    # --- OPTIONAL OBSTACLES ---
-    if enable_obstacles:
-        step_barrier = 0
-        for k in range(1, N+1):
-                for j in range(k_obs):
-                    opti.subject_to(eps_obs[j, k] >= 0)
-                    col_idx = k * k_obs + j
-                    dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
-                    
-                    # 1. Soft Constraint
-                    opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
-                    
-                    # 2. The Exponential Forcefield
-                    # 'shape_factor' controls how WIDE the forcefield is. 
-                    # Higher number = wider, softer warning track. Lower = tighter, sharper wall.
-                    shape_factor = cost_cfg["shape_factor"]
-                    
-                    # Formula: e^( (safe_rad^2 - dist_sqr) / shape_factor )
-                    # As dist_sqr approaches safe_rad^2, the exponent becomes 0, so exp(0) = 1.
-                    # The penalty at the exact boundary is exactly equal to w_barrier.
-                    step_barrier = w_barrier * ca.exp((safe_rad**2 - dist_sqr) / shape_factor)
 
-                    # FIX: Use += to ACCUMULATE the penalty
-                    cost_components["barrier"] += step_barrier
-                    cost += step_barrier
+            # --- OPTIONAL OBSTACLES ---
+    if enable_obstacles:
+        for k in range(1, N+1):
+            for j in range(k_obs):
+                opti.subject_to(eps_obs[j, k] >= 0)
+                col_idx = k * k_obs + j
+                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                
+                # 1. Soft Constraint
+                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
     
     # --- NEIGHBOR AVOIDANCE ---
     

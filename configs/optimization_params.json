@@ -6,8 +6,8 @@
         "w_battery": 1,
         "w_z": 0,
         "w_slack_collision": 0,
-        "w_barrier": 150, 
-        "shape_factor": 2
+        "w_barrier": 50, 
+        "shape_factor": 1
     },
     "constraints": {
         "max_speed": 7.0,
@@ -18,7 +18,7 @@
         "prediction_horizon": 20,
         "timestep": 0.05,
         "k_wp_search": 3,
-        "k_obs_search": 5, 
-        "max_iter": 3000
+        "k_obs_search": 3, 
+        "max_iter": 2000
     }
 }

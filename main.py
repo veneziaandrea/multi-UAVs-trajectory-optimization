@@ -229,11 +229,11 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
         
-        '''
+        
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
-        '''    
+           
         prev_total_cost = total_loop_cost
         num_iter += 1
         num_iter_mpc_prev = n_iter_mpc
@@ -247,6 +247,7 @@ if __name__ == "__main__":
             print(f"  Battery:   {cost_breakdown['battery']:.2f}")
             print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
             print(f"  Barrier:     {cost_breakdown['barrier']:.2f}")
+
 
 print("optimization completed")
 print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
