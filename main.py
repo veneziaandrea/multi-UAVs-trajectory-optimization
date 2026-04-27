@@ -184,6 +184,9 @@ if __name__ == "__main__":
         "barrier": [] 
     }
 
+    total_solver_time = 0.0
+    total_solver_calls = 0
+
    # --- MAIN MPC LOOP ---
     while num_iter <= max_iter:
         total_loop_cost = 0 # Track sum for the whole fleet
@@ -192,6 +195,10 @@ if __name__ == "__main__":
         all_done = all_done = all(d.is_parked for d in drones)
         if all_done:
             print(f"\nMission accomplished in {num_iter} steps!")
+            
+            average_time = total_solver_time / total_solver_calls
+            print(f"Total Solver Calls: {total_solver_calls}")
+            print(f"True Avg Solve Time: {average_time:.5f} seconds")
             break
 
         for i, drone in enumerate(drones):
@@ -242,12 +249,14 @@ if __name__ == "__main__":
                 neighbor_trajs_array = np.empty((3, N + 1, 0))
 
             # Run MPC
-            accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc, cost_breakdown = run_mpc_iteration(
+            accel, new_traj, current_cost_value, t_solve_mpc, cost_breakdown = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree, 
-                num_iter_mpc_prev, t_solve_avg_prev
+                drone.last_traj, neighbor_trajs_array, obs_tree
             )
+
+            total_solver_time += t_solve_mpc
+            total_solver_calls += 1
 
             # Record the costs for this iteration if the solver didn't fail
             if current_cost_value != np.inf: 
@@ -286,8 +295,6 @@ if __name__ == "__main__":
             
         prev_total_cost = total_loop_cost
         num_iter += 1
-        num_iter_mpc_prev = n_iter_mpc
-        t_solve_avg_prev = t_solve_mpc
 
 # --- END MPC LOOP ---
 

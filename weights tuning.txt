@@ -88,3 +88,4 @@ w_slack 10000 still cuts some obstacles
 w slack 1e5 "best" , 1e6 was worse collision wise
 w seen 1.25 w slack as before -> still obstacle clipping
 w slack 1e8 nothing changes for values above 1e5/6
+w slack 500 works better surprisingly lol but still collisions (w seen 1.25)

@@ -788,7 +788,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree, n_iter_mpc, t_solve_avg):
+                      last_traj, neighbor_trajs, obs_tree):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -907,15 +907,12 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
-        t_solve_avg += solve_time
-        n_iter_mpc += 1
-        t_solve_avg = t_solve_avg/n_iter_mpc
         # solver stats
         # when using ipopt 
         # solve_time = sol.stats()['t_wall_total']
         # print(f"MPC solve successful: {solve_time:.4f}s") 
         
-        return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc, comp_vals
+        return optimal_accel[:, 0], new_trajectory, cost_value, solve_time, comp_vals
 
     except RuntimeError:
         print("MPC solve failed! Using safety fallback.")
