@@ -68,5 +68,13 @@ shape factor 1.2
 drones now slow down way too much, near waypoints, it's worse than before. i will turn down again w battery; 
 collision avoidance is better but not completely fault less still. accelerations are again not smooth. the avg solve time increased to almost 2 seconds.
 
+Setup 3)
+w seen 1.5
+w effort 0.5
+w battery 1
+w barrier 7.25
+shape factor 1.2
 
-
+BEST RESULTS SO FAR! 
+NO collisions, reasonable trajectories for 4 out of 5 drones! 
+Bad News: still suffers heavily from the "elastic band" behaviour

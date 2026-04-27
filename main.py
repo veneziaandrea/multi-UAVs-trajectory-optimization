@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
         for i, drone in enumerate(drones):
             
-            # 1. Check if regular mission is done
+            # Check if regular mission is done
             unseen_mask = drone.waypoints[:, 2] == 0
             if not np.any(unseen_mask) and not drone.returning_home:
                 print(f"Drone {drone.id} finished mission! Returning home.")
@@ -206,7 +206,7 @@ if __name__ == "__main__":
                 drone.waypoints = np.vstack([drone.waypoints, home_wp])
                 drone.returning_home = True
         
-            # 2. Check if drone has arrived at home
+            # Check if drone has arrived home
             if drone.returning_home and not drone.is_parked:
                 dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
                 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
                     print(f"Drone {drone.id} has parked safely!")
                     drone.is_parked = True 
 
-            # 3. THE BYPASS
+            # Bypass drones that finished their task
             if drone.is_parked:
                 drone.state["v"] = np.zeros(3)
                 drone.state["a"] = np.zeros(3)
@@ -229,11 +229,11 @@ if __name__ == "__main__":
                 if hasattr(drone, 'history_predictions'):
                     drone.history_predictions.append(stationary_traj)
                 
-                continue # Safely skips the MPC block below and moves to the next drone!
+                continue # Skip the MPC block below and move to the next drone
             
-            # --- 4. RUN MPC FOR ACTIVE DRONES ---
+            # --- RUN MPC FOR ACTIVE DRONES ---
             
-            # Collect trajectories from OTHER drones
+            # Collect trajectories from other drones
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
     
             if len(neighbor_trajs) > 0:
@@ -249,7 +249,7 @@ if __name__ == "__main__":
                 num_iter_mpc_prev, t_solve_avg_prev
             )
 
-            # Record the costs for this iteration
+            # Record the costs for this iteration if the solver didn't fail
             if current_cost_value != np.inf: 
                 cost_history["total"].append(current_cost_value)
                 for key, val in cost_breakdown.items():
@@ -265,7 +265,7 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
             drone.history_a.append(accel)
-            # NEW: Save the applied acceleration so the next loop can calculate Jerk
+            # Save the applied acceleration so the next loop can calculate Jerk
             drone.state["a"] = accel
 
             if num_iter % PRINT_INTERVAL == 0:
@@ -317,19 +317,19 @@ for key, values in cost_history.items():
 plt.title("MPC Cost Components Over Time", fontsize=14)
 plt.xlabel("Iteration Step", fontsize=12)
 plt.ylabel("Cost Value (Log Scale)", fontsize=12)
-plt.yscale("log") # Log scale is highly recommended for optimization costs
+plt.yscale("log") # Log scale 
 plt.grid(True, which="both", ls="--", alpha=0.5)
 plt.legend(loc="upper right")
 plt.tight_layout()
 plt.show()
 
-# This will open a window you can rotate to see the 3D flight paths
+# Open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
 
+# Plot the apllied inputs and velocities
 plot_kinematics(drones, dt)
-# 2. 2D Animation
 
-# This will show the "movie" of the drones moving
+# 2D Animation
 config_path = ROOT / "configs" / "demo_parameters.json"
 config = load_config(config_path)
 map_cfg = config["map"]

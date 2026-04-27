@@ -393,7 +393,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
 
     for i in range(num_regions):
         # i = 0 is the closest unseen waypoint. We give it 100% focus.
-        # Future waypoints in the array get 0% focus so they don't drag the drone backward.
+        # Future waypoints in the array get 0% focus so they don't hold back the drone
         target_focus = 1.0 if i == 0 else 0.0
         wp_term = 0 
         for k in range(1, N + 1): 
