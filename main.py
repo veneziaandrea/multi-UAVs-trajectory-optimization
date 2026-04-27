@@ -149,7 +149,7 @@ if __name__ == "__main__":
     if waypoints.shape[1] == 2:
         seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
         waypoints = np.hstack((waypoints, seen_column)) # Attach it
-
+    
     # --- Assignment Phase ---
     for id_d in drone_ids:
         current_cell = vor.Voronoi_Cells[id_d]
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles= True) 
+        vars_ = setup_test_MPC_QP(num_neighbors,  enable_obstacles= True)
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         new_drone.returning_home = False
@@ -287,8 +287,6 @@ if __name__ == "__main__":
                 print(f"  Slack:     {cost_breakdown['slack']:.2f}")
                 print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
         
-       
-        
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
@@ -299,7 +297,6 @@ if __name__ == "__main__":
 # --- END MPC LOOP ---
 
 print("optimization completed")
-print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
 
 # --- OPTIMIZATION RECAP ---
 print("\n" + "="*40)

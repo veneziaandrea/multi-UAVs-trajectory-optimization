@@ -389,7 +389,6 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     wp_priorities = np.linspace(0.1, 1, N+1)
 
     # 1. Waypoints
-
     for i in range(num_regions):
         # i = 0 is the closest unseen waypoint. We give it 100% focus.
         # Future waypoints in the array get 0% focus so they don't hold back the drone
@@ -759,14 +758,14 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         # Sink the mathematical floor so starting at Z=0 is strictly "inside" the bounds
         opti.subject_to(opti.bounded(-0.1, p[2, k], z_max))
 
-   # CasADi Plugin Options (These remain mostly the same)
+   # CasADi Plugin Options 
     p_opts = {
         "expand": True, 
         "print_time": False,
         "error_on_fail": True # Ensures your try/except block catches failures cleanly
     }
 
-    # OSQP Solver Options (Completely different from IPOPT!)
+    # OSQP Solver Options 
     s_opts = {
         "verbose": False,         # OSQP's version of print_level=0 and sb="yes"
         "max_iter": 10000,        # OSQP takes more micro-iterations than IPOPT. Give it headroom.
@@ -918,4 +917,4 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         print("MPC solve failed! Using safety fallback.")
         cost_value = np.inf
         fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()} 
-        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value, t_solve_avg, n_iter_mpc, fallback_components
+        return np.array([0.0, 0.0, 0.0]), last_traj, cost_value, fallback_components
