@@ -18,7 +18,7 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC 
+from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP
 from utils.drones import Drone
 from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
 
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_test_MPC(num_neighbors=0, enable_obstacles= True) 
+        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles= True) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
         new_drone.returning_home = False

@@ -78,3 +78,13 @@ shape factor 1.2
 BEST RESULTS SO FAR! 
 NO collisions, reasonable trajectories for 4 out of 5 drones! 
 Bad News: still suffers heavily from the "elastic band" behaviour
+
+QP FORMULATION: NO BARRIER function
+Setup as 3 above: collisions occur
+with w_slack 1000 even more collisions occur
+But for one drone the found trajectory is actually much more logic
+w_slack 5000 same but a bit better maybe
+w_slack 10000 still cuts some obstacles
+w slack 1e5 "best" , 1e6 was worse collision wise
+w seen 1.25 w slack as before -> still obstacle clipping
+w slack 1e8 nothing changes for values above 1e5/6

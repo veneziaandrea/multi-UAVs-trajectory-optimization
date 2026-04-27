@@ -43,7 +43,6 @@ map_config = load_config(CONFIGS/"demo_parameters.json")
 bounds_cfg = map_config["map"]
 
 def setup_MPC_QP(num_neighbors): 
-    # ... [Inizializzazione ROOT, SRC, config...] ...
 
     cost_cfg = config["cost"]
     constraints_cfg = config["constraints"]
@@ -100,9 +99,9 @@ def setup_MPC_QP(num_neighbors):
     for k in range(N):
         cost += w_effort * ca.sumsqr(a[:, k])
         cost += w_batt * ca.sumsqr(v[:, k])
-        cost += w_z * ca.sumsqr(p[2, k] - z_ref) # Mantieni la quota!
+        cost += w_z * ca.sumsqr(p[2, k] - z_ref) 
 
-    # 3. Penalità sulle Slack Variables (Funge da Barrier Function)
+    # 3. Penalità sulle Slack Variables 
     for k in range(1, N + 1):
         for j in range(k_obs):
             cost += w_slack * ca.sumsqr(eps_obs[j, k])
@@ -540,6 +539,243 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     }
 
     opti.solver("ipopt", p_opts, s_opts)
+
+    return {
+        "opti": opti, "p": p, "a": a, "p_init": p_init, 
+        "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
+        "flag": flag, "p_ego_prev": p_ego_prev, 
+        "a_ego_prev": a_ego_prev, 
+        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "k_search": num_regions, "k_obs": k_obs, 
+        "cost_components": cost_components, "eps_obs": eps_obs
+    }
+
+def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False): 
+    """
+    Simplified MPC setup for debugging a single drone.
+    Set enable_obstacles=False for a completely empty environment.
+    """
+    cost_cfg = config["cost"]
+    constraints_cfg = config["constraints"]
+    mpc_cfg = config["mpc"]
+
+    w_seen = cost_cfg["w_seen"]
+    w_effort = cost_cfg["w_effort"]
+    w_batt = cost_cfg["w_battery"]
+    z_ref = cost_cfg["z_ref"]
+    w_z = cost_cfg["w_z"] 
+    w_slack = cost_cfg["w_slack_collision"] 
+    w_barrier = cost_cfg["w_barrier"]
+
+    max_vel = constraints_cfg["max_speed"]
+    max_acc = constraints_cfg["max_acceleration"]
+    safe_rad = constraints_cfg["safe_distance"] 
+
+    N = mpc_cfg["prediction_horizon"]
+    dt = mpc_cfg["timestep"]
+    num_regions = mpc_cfg["k_wp_search"]
+    k_obs = mpc_cfg["k_obs_search"]
+
+    x_min, x_max = bounds_cfg["x_bounds"]
+    y_min, y_max = bounds_cfg["y_bounds"]
+    z_min, z_max = bounds_cfg["z_bounds"]
+
+    opti = ca.Opti('conic')
+
+    # --- Variables (Names kept identical for reusability) ---
+    p = opti.variable(3, N+1)  
+    v = opti.variable(3, N+1)  
+    B = opti.variable(1, N+1)  
+    a = opti.variable(3, N)    
+    eps_obs = opti.variable(k_obs, N+1)
+
+    opti.set_initial(eps_obs, 0.01)
+
+    # --- Parameters ---
+    p_init = opti.parameter(3) 
+    v_init = opti.parameter(3)
+    B_init = opti.parameter(1)
+    
+    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
+    p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
+    p_wp = opti.parameter(3, num_regions) 
+    flag = opti.parameter(num_regions)
+    p_ego_prev = opti.parameter(3, N+1)
+    a_ego_prev = opti.parameter(3)
+
+    # --- COST FUNCTION ---
+    cost = 0
+    cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0, "barrier": 0}
+    wp_priorities = np.linspace(0.1, 1, N+1)
+
+    # 1. Waypoints
+
+    for i in range(num_regions):
+        # i = 0 is the closest unseen waypoint. We give it 100% focus.
+        # Future waypoints in the array get 0% focus so they don't hold back the drone
+        target_focus = 1.0 if i == 0 else 0.0
+        wp_term = 0 
+        for k in range(1, N + 1): 
+            # Assegna il peso specifico in base all'ordine di vicinanza
+            weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
+            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus
+            # Aggiungilo al tracker e al costo totale
+            cost_components["waypoints"] += wp_term
+            cost += wp_term
+    '''
+    UNCOMMENT THIS TO USE TERMINAL COST INSTEAD OF RUNNING + PENALTY TO GET TO THE WAYPOINT INCREASING IN THE HORIZON 
+    for i in range(num_regions):
+    
+        # FIX: The Hierarchy. 
+        # i = 0 is the closest unseen waypoint. We give it 100% focus.
+        # Future waypoints in the array get 0% focus so they don't drag the drone backward.
+        target_focus = 1.0 if i == 0 else 0.0 
+    
+                # Determine weight once per region (no longer inside the k-loop)
+        weight = w_seen * wp_priorities[N] if i < len(wp_priorities) else w_seen * 0.01
+        
+        # Calculate term using only the N-th timestep
+        # We use p[:, N] instead of p[:, k]
+        wp_term = (1 - flag[i]) * ca.sumsqr(p[:, N] - p_wp[:, i]) * weight * target_focus
+    
+        # Add to tracker and total cost
+        cost_components["waypoints"] += wp_term
+            cost += wp_term
+        '''
+
+    # 2. Control Effort AKA Jerk & Z-Reference & Battery
+    for k in range(N):
+        
+        # --- JERK MATH ---
+        if k == 0:
+            jerk = a[:, 0] - a_ego_prev
+        else:
+            jerk = a[:, k] - a[:, k-1]
+            
+        eff_term = w_effort * ca.sumsqr(jerk)
+        cost_components["effort"] += eff_term
+        cost += eff_term
+        
+        z_term = w_z * ca.sumsqr(p[2, k] - z_ref)
+        cost_components["z_ref"] += z_term
+        cost += z_term
+        
+        batt_term = w_batt * ca.sumsqr(v[:, k])
+        cost_components["battery"] += batt_term
+        cost += batt_term
+
+    # 3. MICRO-PENALTIES (To prevent IPOPT from crashing on unused variables)
+    cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
+
+    # --- OBSTACLES (Slack Cost, Barrier Cost, & Constraints) ---
+    if enable_obstacles:
+        slack_term = 0
+        step_barrier = 0
+        
+# --- OBSTACLES (Linearized for QP / Fast SQP) ---
+    if enable_obstacles:
+        slack_term = 0
+        
+        for k in range(1, N+1):
+            for j in range(k_obs):
+                # 1. Slack Cost (Quadratic L2 is perfect for QP solvers)
+                slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
+                
+                # 2. LINEARIZED COLLISION CONSTRAINTS (Strictly 2D!)
+                col_idx = k * k_obs + j
+                
+                # Vector from obstacle center to drone's PREVIOUS predicted position
+                dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
+                dist_bar_sqr = ca.sumsqr(dp_bar)
+                
+                # First-order Taylor Expansion (The Separating Hyperplane)
+                linear_term = 2 * ca.dot(dp_bar, (p[:2, k] - p_ego_prev[:2, k]))
+            
+                # The Convex Constraint
+                opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= safe_rad**2)
+                
+                # NOTE: The exponential barrier has been removed 
+                # QP solvers cannot process ca.exp().
+                # Exponential Barrier
+                '''
+                shape_factor = cost_cfg["shape_factor"]
+                step_barrier_val = w_barrier * ca.exp((safe_rad**2 - dist_bar_sqr) / shape_factor)
+                step_barrier += step_barrier_val
+                '''
+        # Add everything to the total cost once the loop finishes
+        cost += slack_term
+        cost_components["slack"] += slack_term
+        
+        cost += step_barrier
+        # cost_components["barrier"] += step_barrier
+        
+    else:
+        # Dummy cost to prevent singular matrices
+        cost += 1e-8 * ca.sumsqr(eps_obs)
+    
+    opti.minimize(cost)
+
+    # --- DYNAMICS CONSTRAINTS ---
+    opti.subject_to(p[:, 0] == p_init)
+    opti.subject_to(v[:, 0] == v_init)
+
+    #slack variables must be positive
+    opti.subject_to(ca.vec(eps_obs) >= 0)
+
+    for k in range(N):
+        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
+        opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
+
+    opti.subject_to(opti.bounded(-max_acc, a, max_acc))
+    opti.subject_to(opti.bounded(-max_vel, v, max_vel))
+
+    # --- OPTIONAL OBSTACLES ---
+    # UNCOMMENT IF SLACK VARIABLE FOR OBSTACLES ARE REMOVED
+    '''
+    if enable_obstacles:
+        for k in range(1, N+1):
+            for j in range(k_obs):
+                opti.subject_to(eps_obs[j, k] >= 0)
+                col_idx = k * k_obs + j
+                dist_sqr = ca.sumsqr(p[:2, k] - p_obs_closest[:2, col_idx])
+                
+                # 1. Soft Constraint
+                opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
+    '''    
+    # --- NEIGHBOR AVOIDANCE ---
+    for j in range(num_neighbors):
+        for k in range(N+1):
+            col_idx = j * (N+1) + k
+            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+            dist_bar_sqr = ca.sumsqr(dp_bar)
+            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
+
+    # --- MAP BOUNDARIES ---
+    for k in range(1, N+1):
+        opti.subject_to(opti.bounded(x_min, p[0, k], x_max))
+        opti.subject_to(opti.bounded(y_min, p[1, k], y_max))
+        
+        # Sink the mathematical floor so starting at Z=0 is strictly "inside" the bounds
+        opti.subject_to(opti.bounded(-0.1, p[2, k], z_max))
+
+   # CasADi Plugin Options (These remain mostly the same)
+    p_opts = {
+        "expand": True, 
+        "print_time": False,
+        "error_on_fail": True # Ensures your try/except block catches failures cleanly
+    }
+
+    # OSQP Solver Options (Completely different from IPOPT!)
+    s_opts = {
+        "verbose": False,         # OSQP's version of print_level=0 and sb="yes"
+        "max_iter": 10000,        # OSQP takes more micro-iterations than IPOPT. Give it headroom.
+        "eps_abs": 1e-4,          # Absolute tolerance (Loosened slightly for stability)
+        "eps_rel": 1e-4,          # Relative tolerance
+        "polish": True            # CRITICAL: Runs a secondary solver step to guarantee high accuracy
+    }
+
+    opti.solver("osqp", p_opts, s_opts)
 
     return {
         "opti": opti, "p": p, "a": a, "p_init": p_init, 
