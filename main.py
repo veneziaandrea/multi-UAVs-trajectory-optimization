@@ -342,6 +342,3 @@ map_limits = [ map_cfg["x_bounds"],
             map_cfg["z_bounds"]
             ]
 animate_simulation(drones, map3d.obstacles, map_limits)
-
-
-

@@ -1,7 +1,7 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 2, 
+        "w_seen": 4, 
         "w_effort": 10,
         "w_battery": 1,
         "w_z": 0,
@@ -19,6 +19,6 @@
         "timestep": 0.02,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 5000
+        "max_iter": 3000
     }
 }
