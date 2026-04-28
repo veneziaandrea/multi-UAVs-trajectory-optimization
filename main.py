@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 from scipy.spatial import KDTree
 from shapely.geometry import Polygon
+import matplotlib.pyplot as plt
 
 # Set the root directory and add the source directory to the Python path
 ROOT = Path(__file__).resolve().parent
@@ -17,9 +18,9 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP 
+from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
 
 def build_demo(config): 
     # Load environment configuration
@@ -110,6 +111,7 @@ if __name__ == "__main__":
         title="Voronoi Partition of the Workspace",
     )
 
+    
     # Extract 3D coordinates (x, y, and half the height for the z-center)
     obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
     # Create an array of radii to match the order of the tree
@@ -119,7 +121,6 @@ if __name__ == "__main__":
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
-    max_iter = 300
     # Imposta ogni quante iterazioni vuoi vedere il report
     PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
@@ -130,6 +131,7 @@ if __name__ == "__main__":
     mpc_cfg = config["mpc"]
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
+    max_iter = mpc_cfg["max_iter"]
 
     # --- INITIALIZATION ---
     # Assume 'drones' is a list of objects containing 
@@ -147,7 +149,7 @@ if __name__ == "__main__":
     if waypoints.shape[1] == 2:
         seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
         waypoints = np.hstack((waypoints, seen_column)) # Attach it
-
+    
     # --- Assignment Phase ---
     for id_d in drone_ids:
         current_cell = vor.Voronoi_Cells[id_d]
@@ -156,43 +158,113 @@ if __name__ == "__main__":
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
 
         # Initialize Drone
-        vars_ = setup_MPC_NLP(num_neighbors) 
+        vars_ = setup_test_MPC_QP(num_neighbors,  enable_obstacles= True)
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
         drones.append(new_drone)
+        new_drone.returning_home = False
+        new_drone.is_parked = False
+        new_drone.home_pos = drone_positions[id_d]
         
     # --- MAIN MPC LOOP ---
     num_iter = 0
     dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
+    ego_accel_prev = 0
     num_iter_mpc_prev = 0
     t_solve_avg_prev = 0
+    
+    # Initialize the history tracker for plot 
+    cost_history = {
+        "total": [],
+        "waypoints": [],
+        "effort": [],
+        "battery": [],
+        "z_ref": [],
+        "barrier": [] 
+    }
 
+    total_solver_time = 0.0
+    total_solver_calls = 0
+
+   # --- MAIN MPC LOOP ---
     while num_iter <= max_iter:
         total_loop_cost = 0 # Track sum for the whole fleet
-        # Check if ALL drones have finished their tasks
-        all_done = all(np.all(d.waypoints[:, 2] == 1.0) for d in drones)
         
+        # Check if ALL drones have finished their tasks (including the RTH waypoint)
+        all_done = all_done = all(d.is_parked for d in drones)
         if all_done:
-            print(f"Mission accomplished in {num_iter} steps!")
-            break
-        
-        for drone in drones:
+            print(f"\nMission accomplished in {num_iter} steps!")
             
-            # Collect trajectories from OTHER drones
-            neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
-            neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
+            average_time = total_solver_time / total_solver_calls
+            print(f"Total Solver Calls: {total_solver_calls}")
+            print(f"True Avg Solve Time: {average_time:.5f} seconds")
+            break
 
-            current_flags = drone.waypoints[:, 2]      # All rows, 3rd column
-            current_coords = drone.waypoints[:, :2]    # All rows, first 2 columns
+        for i, drone in enumerate(drones):
+            
+            # Check if regular mission is done
+            unseen_mask = drone.waypoints[:, 2] == 0
+            if not np.any(unseen_mask) and not drone.returning_home:
+                print(f"Drone {drone.id} finished mission! Returning home.")
+                
+                # Append home position to the waypoints array [x, y, 0 (unseen flag)]
+                home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
+                drone.waypoints = np.vstack([drone.waypoints, home_wp])
+                drone.returning_home = True
+        
+            # Check if drone has arrived home
+            if drone.returning_home and not drone.is_parked:
+                dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
+                
+                if dist_to_home < dist_threshold:
+                    print(f"Drone {drone.id} has parked safely!")
+                    drone.is_parked = True 
+
+            # Bypass drones that finished their task
+            if drone.is_parked:
+                drone.state["v"] = np.zeros(3)
+                drone.state["a"] = np.zeros(3)
+                
+                N = drone.mpc_vars["opti"].value(drone.mpc_vars["p"]).shape[1] - 1
+                stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
+                drone.last_traj = stationary_traj
+                
+                drone.history_p.append(drone.state["p"].copy())
+                drone.history_a.append(np.zeros(3))
+
+                if hasattr(drone, 'history_predictions'):
+                    drone.history_predictions.append(stationary_traj)
+                
+                continue # Skip the MPC block below and move to the next drone
+            
+            # --- RUN MPC FOR ACTIVE DRONES ---
+            
+            # Collect trajectories from other drones
+            neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
+    
+            if len(neighbor_trajs) > 0:
+                neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
+            else:
+                neighbor_trajs_array = np.empty((3, N + 1, 0))
 
             # Run MPC
-            accel, new_traj, current_cost_value, n_iter_mpc, t_solve_mpc, cost_breakdown = run_mpc_iteration(
+            accel, new_traj, current_cost_value, t_solve_mpc, cost_breakdown = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree, 
-                num_iter_mpc_prev, t_solve_avg_prev
+                drone.last_traj, neighbor_trajs_array, obs_tree
             )
+
+            total_solver_time += t_solve_mpc
+            total_solver_calls += 1
+
+            # Record the costs for this iteration if the solver didn't fail
+            if current_cost_value != np.inf: 
+                cost_history["total"].append(current_cost_value)
+                for key, val in cost_breakdown.items():
+                    if key not in cost_history:
+                        cost_history[key] = []
+                    cost_history[key].append(val)
 
             total_loop_cost += current_cost_value
 
@@ -201,33 +273,67 @@ if __name__ == "__main__":
             drone.check_waypoints(dist_threshold)
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
+            drone.history_a.append(accel)
+            # Save the applied acceleration so the next loop can calculate Jerk
+            drone.state["a"] = accel
+
+            if num_iter % PRINT_INTERVAL == 0:
+
+                print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
+                print(f"Total Cost:  {current_cost_value:.2f}")
+                print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
+                print(f"  Effort:    {cost_breakdown['effort']:.2f}")
+                print(f"  Battery:   {cost_breakdown['battery']:.2f}")
+                print(f"  Slack:     {cost_breakdown['slack']:.2f}")
+                print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
         
-        '''
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
-        '''    
+            
         prev_total_cost = total_loop_cost
         num_iter += 1
-        num_iter_mpc_prev = n_iter_mpc
-        t_solve_avg_prev = t_solve_mpc
 
-        if num_iter % PRINT_INTERVAL == 0:
-            print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
-            print(f"Total Cost:  {current_cost_value:.2f}")
-            print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
-            print(f"  Effort:    {cost_breakdown['effort']:.2f}")
-            print(f"  Battery:   {cost_breakdown['battery']:.2f}")
-            print(f"  Z-Ref:     {cost_breakdown['z_ref']:.2f}")
+# --- END MPC LOOP ---
 
 print("optimization completed")
-print(f"Avg mpc loop solve time: {t_solve_avg_prev/5}")
 
-# This will open a window you can rotate to see the 3D flight paths
+# --- OPTIMIZATION RECAP ---
+print("\n" + "="*40)
+print("       OPTIMIZATION COST RECAP")
+print("="*40)
+print(f"{'Component':<15} | {'Mean':<10} | {'Max':<10}")
+print("-" * 40)
+
+# Calculate and print stats
+for key, values in cost_history.items():
+    if len(values) > 0:
+        mean_val = np.mean(values)
+        max_val = np.max(values)
+        print(f"{key.capitalize():<15} | {mean_val:<10.2f} | {max_val:<10.2f}")
+
+plt.figure(figsize=(12, 6))
+for key, values in cost_history.items():
+    if len(values) > 0:
+        # Use log scale if total cost dwarfs the other components
+        plt.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
+
+plt.title("MPC Cost Components Over Time", fontsize=14)
+plt.xlabel("Iteration Step", fontsize=12)
+plt.ylabel("Cost Value (Log Scale)", fontsize=12)
+plt.yscale("log") # Log scale 
+plt.grid(True, which="both", ls="--", alpha=0.5)
+plt.legend(loc="upper right")
+plt.tight_layout()
+plt.show()
+
+# Open a window you can rotate to see the 3D flight paths
 plot_results(drones, map3d.obstacles)
-# 2. 2D Animation
 
-# This will show the "movie" of the drones dodging obstacles
+# Plot the apllied inputs and velocities
+plot_kinematics(drones, dt)
+
+# 2D Animation
 config_path = ROOT / "configs" / "demo_parameters.json"
 config = load_config(config_path)
 map_cfg = config["map"]

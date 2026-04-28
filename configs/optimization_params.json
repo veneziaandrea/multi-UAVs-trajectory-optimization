@@ -2,11 +2,12 @@
     "cost": {
         "z_ref": 5.0, 
         "w_seen": 2, 
-        "w_effort": 8,
-        "w_battery": 0,
-        "p_hover": 100,
+        "w_effort": 10,
+        "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 0
+        "w_slack_collision": 500,
+        "w_barrier": 7.25, 
+        "shape_factor": 1.2
     },
     "constraints": {
         "max_speed": 7.0,
@@ -14,9 +15,10 @@
         "safe_distance": 1
     },
     "mpc": {
-        "prediction_horizon": 20,
-        "timestep": 0.05,
+        "prediction_horizon": 50,
+        "timestep": 0.02,
         "k_wp_search": 3,
-        "k_obs_search": 2
+        "k_obs_search": 3, 
+        "max_iter": 5000
     }
 }

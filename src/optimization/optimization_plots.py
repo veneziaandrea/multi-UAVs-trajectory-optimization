@@ -93,15 +93,67 @@ def animate_simulation(drones, obstacles, map_limits):
         for drone in drones:
             if frame < len(drone.history_p):
                 pos = drone.history_p[frame]
-                pred = drone.history_predictions[frame]
                 
                 # Drone body
                 ax.plot(pos[0], pos[1], 'ko', markersize=6)
+                
+                # --- NEW: Safely fetch the prediction ---
+                if frame < len(drone.history_predictions):
+                    pred = drone.history_predictions[frame]
+                elif len(drone.history_predictions) > 0:
+                    # If we run out of predictions, just show the final parked one
+                    pred = drone.history_predictions[-1] 
+                else:
+                    pred = None
+                
                 # The "Look Ahead" line from MPC
-                ax.plot(pred[0, :], pred[1, :], color='blue', linestyle='--', alpha=0.4)
+                if pred is not None:
+                    ax.plot(pred[0, :], pred[1, :], color='blue', linestyle='--', alpha=0.4)
                 
         ax.set_title(f"Time Step: {frame}")
 
     max_frames = max(len(d.history_p) for d in drones)
     ani = animation.FuncAnimation(fig, update, frames=max_frames, interval=50)
     plt.show()
+
+def plot_kinematics(drones, dt):
+    """
+    Plots the velocity and acceleration profiles of the drones over time,
+    displaying their average values in the legend.
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    colors = ['blue', 'green', 'magenta', 'cyan', 'orange']
+
+    for i, drone in enumerate(drones):
+        path = np.array(drone.history_p)
+        
+        # Need at least 3 points to calculate acceleration
+        if len(path) > 2:
+            # 1. Calculate Velocity (Derivative of Position)
+            velocities = np.diff(path, axis=0) / dt
+            v_mag = np.linalg.norm(velocities, axis=1)
+            time_v = np.arange(len(v_mag)) * dt
+            avg_v = np.mean(v_mag)
+            
+            ax1.plot(time_v, v_mag, color=colors[i % len(colors)], linewidth=2,
+                     label=f'Drone {drone.id} (Avg: {avg_v:.2f} m/s)')
+
+            # Formatting Velocity Plot
+            ax1.set_title("Drone Velocity Profile", fontsize=14)
+            ax1.set_ylabel("Velocity Magnitude [m/s]", fontsize=12)
+            ax1.grid(True, which="both", ls="--", alpha=0.5)
+            ax1.legend(loc="upper right")
+
+            # 2. Plot Acceleration (From the solver directly)
+            # Make sure we have acceleration data logged
+            if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
+                true_accel = np.array(drone.history_a)
+                a_mag = np.linalg.norm(true_accel, axis=1)
+                
+                # Match the time array length
+                time_a = np.arange(len(a_mag)) * dt
+                avg_a = np.mean(a_mag)
+                
+                ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
+                            label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
+                ax2.set_title("Drone Acceleration Profile", fontsize = 14)

@@ -6,27 +6,34 @@ class Drone:
 
         self.mpc_vars = mpc_vars
 
+        self.home_pos = start_pos
+
         self.waypoints = np.atleast_2d(waypoints) # waypoints will be (N, 3)
         # Convert input to numpy array
         p_pos = np.array(start_pos, dtype=float).flatten()
 
         # If the input is [x, y], add a default Z (e.g., 0.0 or 1.0 for takeoff)
         if p_pos.size == 2:
-            p_pos = np.append(p_pos, 0.0) 
+            p_pos = np.append(p_pos, 0.1) 
 
         # Now p_pos is guaranteed to be size 3, so reshape(3,1) will work
         self.state = {
             "p": p_pos,
             "v": np.zeros(3),
+            "a": np.zeros(3),
             "B": 100.0
         }
 
         self.last_traj = np.tile(self.state["p"].reshape(3, 1), (1, horizon_n + 1))
     
-        
         # Telemetry history for plotting
         self.history_p = []
         self.history_predictions = []
+        self.history_a = []
+
+        # flags to consider return to home and end of task 
+        self.returning_home = False
+        self.is_parked = False
 
     def drone_model(self, accel, dt):
         """
