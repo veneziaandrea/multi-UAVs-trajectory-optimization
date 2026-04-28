@@ -5,17 +5,17 @@
         "w_effort": 0.25,
         "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 7e11,
+        "w_slack_collision": 1e6,
         "w_barrier": 7.5, 
         "shape_factor": 1.2
     },
     "constraints": {
         "max_speed": 7.0,
         "max_acceleration": 2.5,
-        "safe_distance": 1
+        "safe_distance": 1.5
     },
     "mpc": {
-        "prediction_horizon": 40,
+        "prediction_horizon": 100,
         "timestep": 0.02,
         "k_wp_search": 3,
         "k_obs_search": 3, 
