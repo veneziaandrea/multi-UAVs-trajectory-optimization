@@ -112,4 +112,34 @@ def kmeans_clustering(free_space, num_drones, *, seed=None, num_samples=2000, ma
 
     return centroids
 
+def sanitize_waypoints(waypoints, obstacles, safety_margin=1.5):
+    """
+    Sposta i waypoint troppo vicini agli ostacoli.
+    safety_margin: distanza minima dal centro dell'ostacolo (raggio ostacolo + buffer).
+    """
+    sanitized_wps = np.copy(waypoints)
+    
+    for i, wp in enumerate(sanitized_wps):
+        for obs in obstacles:
+            # Distanza dal centro dell'ostacolo
+            dist = np.linalg.norm(wp[:2] - np.array([obs.x, obs.y]))
+            
+            # Limite minimo = raggio fisico + margine di manovra MPC
+            min_dist = obs.radius + safety_margin
+            
+            if dist < min_dist:
+                # Calcola il vettore unitario dal centro dell'ostacolo al waypoint
+                push_dir = (wp[:2] - np.array([obs.x, obs.y]))
+                push_dir_norm = np.linalg.norm(push_dir)
+                
+                if push_dir_norm < 1e-3: # Se il WP è esattamente al centro
+                    push_dir = np.array([1.0, 0.0]) # Direzione arbitraria
+                else:
+                    push_dir /= push_dir_norm
+                
+                # Riposiziona il waypoint alla distanza minima di sicurezza + un piccolo offset
+                sanitized_wps[i, :2] = np.array([obs.x, obs.y]) + push_dir * (min_dist + 0.2)
+                
+    return sanitized_wps
+
 

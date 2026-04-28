@@ -15,10 +15,11 @@ if str(SRC) not in sys.path:
 from config import load_config, seed_everything
 from environment.map_generation_v2 import Map3D
 from utils.plot_initial_envronment import plot_initial_environment
-from utils.kmeans import kmeans_clustering
+from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP
+from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
+from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
 from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
 
@@ -67,7 +68,12 @@ def build_demo(config):
             map3d.free_space,
             k,
             seed=seed,
-        )
+        )   
+
+    # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+    # ho messo 1 invece di importare safe_distance dal file config perchè non avevo sbatti
+    safe_margin = 1 + 0.5   
+    waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
     print("Computing Voronoi partition for the generated map and drone starting positions...")
@@ -156,10 +162,12 @@ if __name__ == "__main__":
         partition_shape = Polygon(current_cell.polygon)
         
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
+        # ORDINA i waypoint prima di creare l'oggetto Drone
+        waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
 
         # Initialize Drone
-        vars_ = setup_test_MPC_QP(num_neighbors,  enable_obstacles= True)
-        new_drone = Drone(id_d, drone_positions[id_d], waypoints_assigned, vars_, N)
+        vars_ = setup_test_MPC_QP(num_neighbors=0, enable_obstacles=True) 
+        new_drone = Drone(id_d, drone_positions[id_d], waypoints_ordered, vars_, N)
         drones.append(new_drone)
         new_drone.returning_home = False
         new_drone.is_parked = False
