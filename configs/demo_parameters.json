@@ -13,7 +13,7 @@
         "num_uavs": 5,
         "max_speed": 5.0,
         "max_acceleration": 2.0,
-        "altitude": 0.0,
+        "altitude": 5.0,
         "start_separation": 1.5
     }
 }
