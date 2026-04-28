@@ -15,7 +15,7 @@ if str(SRC) not in sys.path:
 from config import load_config, seed_everything
 from environment.map_generation_v2 import Map3D
 from utils.plot_initial_envronment import plot_initial_environment
-from utils.kmeans import kmeans_clustering
+from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
@@ -68,7 +68,12 @@ def build_demo(config):
             map3d.free_space,
             k,
             seed=seed,
-        )
+        )   
+
+    # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+    # ho messo 1 invece di importare safe_distance dal file config perchè non avevo sbatti
+    safe_margin = 1 + 0.5   
+    waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
     print("Computing Voronoi partition for the generated map and drone starting positions...")

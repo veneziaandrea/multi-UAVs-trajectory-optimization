@@ -1,11 +1,11 @@
 {
     "cost": {
         "z_ref": 5.0, 
-        "w_seen": 4, 
+        "w_seen": 3, 
         "w_effort": 0.25,
         "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 500,
+        "w_slack_collision": 7e11,
         "w_barrier": 7.5, 
         "shape_factor": 1.2
     },
@@ -15,10 +15,10 @@
         "safe_distance": 1
     },
     "mpc": {
-        "prediction_horizon": 80,
-        "timestep": 0.05,
+        "prediction_horizon": 40,
+        "timestep": 0.02,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 3000
+        "max_iter": 5000
     }
 }
