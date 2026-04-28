@@ -8,6 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_results(drones, obstacles):
     fig = plt.figure(figsize=(12, 9))
     ax = fig.add_subplot(111, projection='3d')
@@ -21,9 +24,6 @@ def plot_results(drones, obstacles):
         x_grid = obs.radius * np.cos(theta_grid) + obs.x
         y_grid = obs.radius * np.sin(theta_grid) + obs.y
         
-        # --- THE FIX ---
-        # 1. Use facecolors='r' 
-        # 2. Set shade=False to avoid the internal broadcast error
         ax.plot_surface(x_grid, y_grid, z_grid, 
                         color='r', 
                         alpha=0.3, 
@@ -32,10 +32,9 @@ def plot_results(drones, obstacles):
         ax.plot_wireframe(x_grid, y_grid, z_grid, color='r', alpha=0.1, linewidth=0.5)
 
     # --- 2. Plot Waypoints ---
-    # We use a different color/marker to distinguish them from drones
     for drone in drones:
-        wps = drone.waypoints # Assuming shape [N x 3] (x, y, seen)
-        # Filter only active waypoints (seen == 0) or plot all with different alpha
+        wps = drone.waypoints 
+        # Placed at Z=0.2 so they don't clip into the floor
         ax.scatter(wps[:, 0], wps[:, 1], 0.2, marker='*', s=100, 
                    color='gold', edgecolors='k', label=f'WPs Drone {drone.id}')
 
@@ -44,6 +43,7 @@ def plot_results(drones, obstacles):
     for i, drone in enumerate(drones):
         path = np.array(drone.history_p)
         if len(path) > 0:
+            # Plot the actual 3D path
             ax.plot(path[:, 0], path[:, 1], path[:, 2], 
                     color=colors[i % len(colors)], linewidth=3, label=f'Drone {drone.id}')
             
@@ -54,13 +54,19 @@ def plot_results(drones, obstacles):
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
     ax.set_zlabel('Z [m]')
-    ax.set_title("3D Swarm Mission Visualizer")
+    ax.set_title("3D Swarm Mission Visualizer (Bird's-Eye View)")
     
-    # Set axis limits to match your map bounds [0, 40]
     ax.set_xlim(0, 40)
     ax.set_ylim(0, 40)
-    ax.set_zlim(0, 20) # Adjust based on your max flying height
+    ax.set_zlim(0, 20) 
+
+    # --- THE FIX: ORTHOGRAPHIC BIRD'S EYE VIEW ---
+    # 1. Orthographic projection removes perspective distortion (leaning cylinders)
+    ax.set_proj_type('ortho') 
     
+    # 2. elev=90 points the camera straight down. azim=-90 aligns X/Y to a standard 2D grid.
+    ax.view_init(elev=90, azim=-90)
+
     plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
     plt.tight_layout()
     plt.show()
@@ -157,3 +163,7 @@ def plot_kinematics(drones, dt):
                 ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
                             label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
                 ax2.set_title("Drone Acceleration Profile", fontsize = 14)
+                 # Formatting Acceleration Plot
+                ax2.set_ylabel("Acceleration Magnitude [m/s]", fontsize=12)
+                ax2.grid(True, which="both", ls="--", alpha=0.5)
+                ax2.legend(loc="upper right")

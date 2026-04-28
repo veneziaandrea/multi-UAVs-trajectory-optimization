@@ -89,3 +89,33 @@ w slack 1e5 "best" , 1e6 was worse collision wise
 w seen 1.25 w slack as before -> still obstacle clipping
 w slack 1e8 nothing changes for values above 1e5/6
 w slack 500 works better surprisingly lol but still collisions (w seen 1.25)
+
+DEFINITIVE SETUP: works well in multiple maps, with even 30 obstacles, only some drone "rides the contour of the obstacle" sometimes; drone avoidance works well, 
+added slack variables also on those.
+
+{
+    "cost": {
+        "z_ref": 5.0, 
+        "w_seen": 4, 
+        "w_effort": 10,
+        "w_battery": 1,
+        "w_z": 0,
+        "w_slack_collision": 100,
+        "w_barrier": 7.5, 
+        "shape_factor": 1.2
+    },
+    "constraints": {
+        "max_speed": 7.0,
+        "max_acceleration": 2.5,
+        "safe_distance": 1.5
+    },
+    "mpc": {
+        "prediction_horizon": 75,
+        "timestep": 0.02,
+        "k_wp_search": 3,
+        "k_obs_search": 3, 
+        "max_iter": 3000
+    }
+}
+
+Avg Solve Time: 0.03787 seconds -> 26.4061262212833 Hz 

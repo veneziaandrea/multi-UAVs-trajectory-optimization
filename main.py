@@ -70,9 +70,9 @@ def build_demo(config):
             seed=seed,
         )   
 
-    # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+    # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.25m)
     # ho messo 1 invece di importare safe_distance dal file config perchè non avevo sbatti
-    safe_margin = 1 + 0.5   
+    safe_margin = 1.5 + 0.25   
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
 
         # Initialize Drone
-        vars_ = setup_test_MPC_QP(num_neighbors=0, enable_obstacles=True) 
+        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles=True) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_ordered, vars_, N)
         drones.append(new_drone)
         new_drone.returning_home = False
@@ -179,9 +179,8 @@ if __name__ == "__main__":
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     ego_accel_prev = 0
-    num_iter_mpc_prev = 0
-    t_solve_avg_prev = 0
-    
+    t_solve_avg = 0
+
     # Initialize the history tracker for plot 
     cost_history = {
         "total": [],
@@ -206,7 +205,7 @@ if __name__ == "__main__":
             
             average_time = total_solver_time / total_solver_calls
             print(f"Total Solver Calls: {total_solver_calls}")
-            print(f"True Avg Solve Time: {average_time:.5f} seconds")
+            print(f"Avg Solve Time: {average_time:.5f} seconds")
             break
 
         for i, drone in enumerate(drones):
@@ -234,7 +233,7 @@ if __name__ == "__main__":
                 drone.state["v"] = np.zeros(3)
                 drone.state["a"] = np.zeros(3)
                 
-                N = drone.mpc_vars["opti"].value(drone.mpc_vars["p"]).shape[1] - 1
+                N = drone.mpc_vars["p"].shape[1] - 1
                 stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
                 drone.last_traj = stationary_traj
                 
@@ -257,7 +256,7 @@ if __name__ == "__main__":
                 neighbor_trajs_array = np.empty((3, N + 1, 0))
 
             # Run MPC
-            accel, new_traj, current_cost_value, t_solve_mpc, cost_breakdown = run_mpc_iteration(
+            accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
                 drone.last_traj, neighbor_trajs_array, obs_tree
@@ -282,7 +281,7 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
             drone.history_a.append(accel)
-            # Save the applied acceleration so the next loop can calculate Jerk
+            # Save the applied acceleration so the next loop can calculate jerk
             drone.state["a"] = accel
 
             if num_iter % PRINT_INTERVAL == 0:

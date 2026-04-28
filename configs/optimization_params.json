@@ -1,16 +1,11 @@
 {
     "cost": {
         "z_ref": 5.0, 
-<<<<<<< HEAD
-        "w_seen": 4, 
-        "w_effort": 10,
-=======
         "w_seen": 3, 
-        "w_effort": 0.25,
->>>>>>> 7b709ebf5d799e2553b473c2c8997f9da294e2e7
+        "w_effort": 10,
         "w_battery": 1,
         "w_z": 0,
-        "w_slack_collision": 1e6,
+        "w_slack_collision": 100,
         "w_barrier": 7.5, 
         "shape_factor": 1.2
     },
@@ -20,7 +15,7 @@
         "safe_distance": 1.5
     },
     "mpc": {
-        "prediction_horizon": 100,
+        "prediction_horizon": 75,
         "timestep": 0.02,
         "k_wp_search": 3,
         "k_obs_search": 3, 

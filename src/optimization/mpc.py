@@ -193,8 +193,10 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     B = opti.variable(1, N+1)  
     a = opti.variable(3, N)    
     eps_obs = opti.variable(k_obs, N+1)
+    eps_neigh = opti.variable(num_neighbors, N+1) # New slack for neighbors
 
     opti.set_initial(eps_obs, 0.01)
+    opti.set_initial(eps_neigh, 0.01)
 
     # --- Parameters ---
     p_init = opti.parameter(3) 
@@ -327,6 +329,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
 
     #slack variables must be positive
     opti.subject_to(ca.vec(eps_obs) >= 0)
+    opti.subject_to(ca.vec(eps_neigh) >= 0)
 
     for k in range(N):
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
@@ -349,13 +352,27 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 opti.subject_to(dist_sqr + eps_obs[j, k] >= safe_rad**2)
     '''    
     # --- NEIGHBOR AVOIDANCE ---
-    for j in range(num_neighbors):
-        for k in range(N+1):
-            col_idx = j * (N+1) + k
-            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
-            dist_bar_sqr = ca.sumsqr(dp_bar)
-            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
-            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
+    if num_neighbors > 0:
+        slack_neigh_term = 0
+        for j in range(num_neighbors):
+            for k in range(1, N+1): # FIX 1: Start at k=1, not k=0
+                col_idx = j * (N+1) + k
+                dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+                dist_bar_sqr = ca.sumsqr(dp_bar)
+                linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
+                
+                # FIX 2: Add eps_neigh to soften the constraint
+                opti.subject_to(dist_bar_sqr + linear_term + eps_neigh[j, k] >= safe_rad**2)
+                
+                # Add to local slack accumulator
+                slack_neigh_term += w_slack * ca.sumsqr(eps_neigh[j, k])
+        
+        # Apply the accumulated penalty to the solver cost
+        cost += slack_neigh_term
+        cost_components["slack"] += slack_neigh_term
+    else:
+        # Dummy cost to prevent singular matrices when 0 neighbors
+        cost += 1e-8 * ca.sumsqr(eps_neigh)
 
     # --- MAP BOUNDARIES ---
     for k in range(1, N+1):
@@ -376,8 +393,8 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     s_opts = {
         "verbose": False,         # OSQP's version of print_level=0 and sb="yes"
         "max_iter": 10000,        # OSQP takes more micro-iterations than IPOPT. Give it headroom.
-        "eps_abs": 1e-4,          # Absolute tolerance (Loosened slightly for stability)
-        "eps_rel": 1e-4,          # Relative tolerance
+        "eps_abs": 1e-6,          # Absolute tolerance (Loosened slightly for stability)
+        "eps_rel": 1e-6,          # Relative tolerance
         "polish": True            # CRITICAL: Runs a secondary solver step to guarantee high accuracy
     }
 
@@ -390,7 +407,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         "a_ego_prev": a_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, 
-        "cost_components": cost_components, "eps_obs": eps_obs
+        "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh
     }
 
 def setup_MPC_NLP(num_neighbors): 
@@ -791,7 +808,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree, n_iter_mpc, t_solve_avg):
+                      last_traj, neighbor_trajs, obs_tree):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -906,20 +923,18 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         new_trajectory = sol.value(mpc_vars["p"])
         optimal_accel = sol.value(mpc_vars["a"])
         
-        t_solve_avg += solve_time
-        n_iter_mpc += 1
-        t_solve_avg = t_solve_avg/n_iter_mpc
         # solver stats
         # when using ipopt 
         # solve_time = sol.stats()['t_wall_total']
         # print(f"MPC solve successful: {solve_time:.4f}s") 
         
-        return optimal_accel[:, 0], new_trajectory, cost_value, t_solve_avg, n_iter_mpc, comp_vals
+        return optimal_accel[:, 0], new_trajectory, cost_value, comp_vals, solve_time
 
     except RuntimeError:
         print(f"Drone {current_state.get('id', 'unknown')} MPC solve failed! Safety braking.")
         cost_value = np.inf
-        # FIX: Applica una frenata decisa invece di lasciarlo scivolare
-        braking_accel = -current_state["v"] * 2.0 
-        fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()} 
-        return braking_accel, last_traj, cost_value, t_solve_avg, n_iter_mpc, fallback_components
+        # Applica una frenata decisa invece di lasciarlo scivolare
+        braking_accel = -current_state["v"] 
+        fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()}
+        solve_time = 0 # fallback shouldn't contaminate the real value
+        return braking_accel, last_traj, cost_value, fallback_components, solve_time
