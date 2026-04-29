@@ -273,17 +273,25 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     # 3. MICRO-PENALTIES (To prevent IPOPT from crashing on unused variables)
     cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
 
-    # --- OBSTACLES (Slack Cost, Barrier Cost, & Constraints) ---
-    if enable_obstacles:
-        slack_term = 0
-        step_barrier = 0
+    # Definire una distanza di influenza (es. raggio di sicurezza + 0.5m)
+    #dist_influence = safe_rad + 2.5
         
 # --- OBSTACLES (Linearized for QP / Fast SQP) ---
     if enable_obstacles:
         slack_term = 0
+        #step_barrier = 0
         
         for k in range(1, N+1):
             for j in range(k_obs):
+                #col_idx = k * k_obs + j
+                #dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
+                #dist_bar_sqr = ca.sumsqr(dp_bar)
+                
+                # Penalità quadratica (Barrier QP-compatibile)
+                # Si attiva solo se il drone entra nel raggio di influenza
+                #barrier_val = w_barrier * ca.fmax(0, dist_influence**2 - dist_bar_sqr)**2
+                #step_barrier += barrier_val
+
                 # 1. Slack Cost (Quadratic L2 is perfect for QP solvers)
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
                 
@@ -312,8 +320,8 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         cost += slack_term
         cost_components["slack"] += slack_term
         
-        cost += step_barrier
-        # cost_components["barrier"] += step_barrier
+        #cost += step_barrier
+        #cost_components["barrier"] += step_barrier
         
     else:
         # Dummy cost to prevent singular matrices
@@ -376,8 +384,8 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     s_opts = {
         "verbose": False,         # OSQP's version of print_level=0 and sb="yes"
         "max_iter": 10000,        # OSQP takes more micro-iterations than IPOPT. Give it headroom.
-        "eps_abs": 1e-4,          # Absolute tolerance (Loosened slightly for stability)
-        "eps_rel": 1e-4,          # Relative tolerance
+        "eps_abs": 1e-6,          # Absolute tolerance (Loosened slightly for stability)
+        "eps_rel": 1e-6,          # Relative tolerance
         "polish": True            # CRITICAL: Runs a secondary solver step to guarantee high accuracy
     }
 

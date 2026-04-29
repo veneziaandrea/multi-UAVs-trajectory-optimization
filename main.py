@@ -72,7 +72,7 @@ def build_demo(config):
 
     # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
     # ho messo 1 invece di importare safe_distance dal file config perchè non avevo sbatti
-    safe_margin = 1 + 0.5   
+    safe_margin = 1.5 + 0.25   
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
@@ -346,6 +346,3 @@ map_limits = [ map_cfg["x_bounds"],
             map_cfg["z_bounds"]
             ]
 animate_simulation(drones, map3d.obstacles, map_limits)
-
-
-
