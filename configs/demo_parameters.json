@@ -15,5 +15,12 @@
         "max_acceleration": 2.0,
         "altitude": 5.0,
         "start_separation": 1.5
+    },
+    "pybullet": {
+        "enabled": true,
+        "gui": true,
+        "real_time": true,
+        "drone_radius": 0.5,
+        "drone_visual": "quadrotor"
     }
 }

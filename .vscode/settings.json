@@ -1,3 +1,6 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:venv"
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "code-runner.saveFileBeforeRun": true,
+    "code-runner.runInTerminal": true,
+    "code-runner.ignoreSelection": true
 }
