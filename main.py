@@ -255,11 +255,17 @@ if __name__ == "__main__":
             else:
                 neighbor_trajs_array = np.empty((3, N + 1, 0))
 
+            # Decide the weight based on the drone's status
+            if drone.returning_home:
+                current_w_seen = config["cost"]["w_seen_rth"]
+            else:
+                current_w_seen = config["cost"]["w_seen"]
+
             # Run MPC
             accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree
+                drone.last_traj, neighbor_trajs_array, obs_tree, current_w_seen
             )
 
             total_solver_time += t_solve_mpc

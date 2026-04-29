@@ -2,6 +2,7 @@
     "cost": {
         "z_ref": 5.0, 
         "w_seen": 3, 
+        "w_seen_rth": 0.5,
         "w_effort": 10,
         "w_battery": 1,
         "w_z": 0,

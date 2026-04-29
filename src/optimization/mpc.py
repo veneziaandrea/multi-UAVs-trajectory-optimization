@@ -210,6 +210,8 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     p_ego_prev = opti.parameter(3, N+1)
     a_ego_prev = opti.parameter(3)
 
+    w_seen = opti.parameter(1)
+
     # --- COST FUNCTION ---
     cost = 0
     cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0, "barrier": 0}
@@ -407,7 +409,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         "a_ego_prev": a_ego_prev, 
         "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, 
-        "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh
+        "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh, "w_seen": w_seen
     }
 
 def setup_MPC_NLP(num_neighbors): 
@@ -808,7 +810,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree):
+                      last_traj, neighbor_trajs, obs_tree, current_w_seen):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -891,6 +893,8 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
     opti.set_value(mpc_vars["a_ego_prev"], current_state["a"])
+
+    opti.set_value(mpc_vars["w_seen"], current_w_seen)
         
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
     
