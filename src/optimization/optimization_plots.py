@@ -3,13 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import numpy as np
-
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
-import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
 def plot_results(drones, obstacles):
     fig = plt.figure(figsize=(12, 9))
@@ -167,3 +161,94 @@ def plot_kinematics(drones, dt):
                 ax2.set_ylabel("Acceleration Magnitude [m/s]", fontsize=12)
                 ax2.grid(True, which="both", ls="--", alpha=0.5)
                 ax2.legend(loc="upper right")
+
+def calculate_final_coverage(drones, map_limits, L, W, res=0.5):
+    x_range = np.arange(map_limits[0][0], map_limits[0][1], res)
+    y_range = np.arange(map_limits[1][0], map_limits[1][1], res)
+    grid = np.zeros((len(x_range), len(y_range)), dtype=bool)
+    
+    # Pre-calculate grid coordinates for vectorized checking
+    X_grid, Y_grid = np.meshgrid(x_range, y_range, indexing='ij')
+
+    for drone in drones:
+        # Convert history to arrays
+        pos_hist = np.array(drone.history_p) 
+        # Calculate headings from positions if velocity history isn't explicit
+        # or use drone.history_v if you logged it[cite: 14]
+        
+        for i in range(1, len(pos_hist)):
+            curr_p = pos_hist[i]
+            prev_p = pos_hist[i-1]
+            
+            # 1. Determine rotation (heading)
+            dx, dy = curr_p[0] - prev_p[0], curr_p[1] - prev_p[1]
+            theta = np.arctan2(dy, dx) if (abs(dx) > 1e-3 or abs(dy) > 1e-3) else 0
+            
+            # 2. Local frame transformation
+            # Translate grid so drone is at origin
+            dx_grid = X_grid - curr_p[0]
+            dy_grid = Y_grid - curr_p[1]
+            
+            # Rotate grid points by -theta to align with drone axes
+            x_local = dx_grid * np.cos(theta) + dy_grid * np.sin(theta)
+            y_local = -dx_grid * np.sin(theta) + dy_grid * np.cos(theta)
+            
+            # 3. Apply Coverage Mask
+            mask = (np.abs(x_local) <= L/2) & (np.abs(y_local) <= W/2)
+            grid |= mask # Logical OR to accumulate coverage
+
+    coverage_pct = (np.sum(grid) / grid.size) * 100
+
+    return coverage_pct, grid
+
+def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
+    """
+    Disegna la mappa di copertura evidenziando le aree viste e non viste.
+    """
+    x_range = np.arange(map_limits[0][0], map_limits[0][1], res)
+    y_range = np.arange(map_limits[1][0], map_limits[1][1], res)
+    
+    fig, ax = plt.subplots(figsize=(10, 10))
+    
+    # 1. Disegna la Coverage Heatmap
+    # coverage_grid è una matrice Booleana (True=Visto, False=Non Visto).
+    # Usiamo la colormap 'RdYlGn' (Red-Yellow-Green): Rosso=0 (Non visto), Verde=1 (Visto)
+    # Trasponiamo la griglia (.T) perché imshow inverte gli assi X e Y per default.
+    cmap = plt.get_cmap('RdYlGn')
+    ax.imshow(
+        coverage_grid.T, 
+        origin='lower', 
+        extent=[x_range[0], x_range[-1], y_range[0], y_range[-1]], 
+        cmap=cmap, 
+        alpha=0.5 # Trasparenza per vedere la griglia sotto
+    )
+    
+    # 2. Disegna gli Ostacoli
+    for obs in obstacles:
+        circle = Circle((obs.x, obs.y), obs.radius, color='black', alpha=0.7)
+        ax.add_patch(circle)
+        
+    # 3. Sovrapponi le Traiettorie dei Droni
+    # Questo aiuta a capire PERCHÉ un'area è stata coperta o mancata
+    colors = ['blue', 'cyan', 'magenta', 'yellow', 'white']
+    for i, drone in enumerate(drones):
+        if len(drone.history_p) > 0:
+            traj = np.array(drone.history_p)
+            ax.plot(
+                traj[:, 0], traj[:, 1], 
+                color=colors[i % len(colors)], 
+                linewidth=1.5, 
+                label=f'Drone {drone.id} Path'
+            )
+            
+    # 4. Formattazione del Grafico
+    ax.set_title("UAV Swarm Coverage Map\n(Green = Seen, Red = Unseen)", fontsize=16, fontweight='bold')
+    ax.set_xlabel("X Position [m]", fontsize=12)
+    ax.set_ylabel("Y Position [m]", fontsize=12)
+    ax.set_xlim(map_limits[0][0], map_limits[0][1])
+    ax.set_ylim(map_limits[1][0], map_limits[1][1])
+    ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1))
+    ax.grid(True, linestyle='--', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()

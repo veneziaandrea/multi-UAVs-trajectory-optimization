@@ -23,7 +23,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map
 
 def build_demo(config): 
     # Load environment configuration
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
+    dist_threshold = 0.3 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     ego_accel_prev = 0
@@ -372,3 +372,15 @@ map_limits = [ map_cfg["x_bounds"],
             map_cfg["z_bounds"]
             ]
 animate_simulation(drones, map3d.obstacles, map_limits)
+
+H_FOV = 71.1 #Horizontal FOV is equal to 71.1°
+V_FOV = 56.3 #Vertical FOV is equal to 56.3°
+h = 5 #Distanza del drone dal livello 0 del terreno
+L = 2* h * math.tan(math.radians(H_FOV/2)) # Largehzza immagine
+W = 2* h * math.tan(math.radians(V_FOV/2)) # Altezza immagine
+# 1. Calcola e ottieni la griglia
+final_coverage_pct, coverage_grid = calculate_final_coverage(drones, map_limits, L, W, 0.5)
+print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+
+# 2. Plotta la mappa Seen/Unseen
+plot_coverage_map(coverage_grid, map_limits, 0.5, map3d.obstacles, drones)
