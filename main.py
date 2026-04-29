@@ -204,7 +204,7 @@ if __name__ == "__main__":
             print(f"\nMission accomplished in {num_iter} steps!")
             
             average_time = total_solver_time / total_solver_calls
-            print(f"Total Solver Calls: {total_solver_calls}")
+            #print(f"Total Solver Calls: {total_solver_calls}")
             print(f"Avg Solve Time: {average_time:.5f} seconds")
             break
 
@@ -319,22 +319,34 @@ for key, values in cost_history.items():
         max_val = np.max(values)
         print(f"{key.capitalize():<15} | {mean_val:<10.2f} | {max_val:<10.2f}")
 
-plt.figure(figsize=(12, 6))
-for key, values in cost_history.items():
-    if len(values) > 0:
-        # Use log scale if total cost dwarfs the other components
-        plt.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
+# Filter out empty entries to determine the number of subplots needed
+valid_items = [(key, values) for key, values in cost_history.items() if len(values) > 0]
+num_plots = len(valid_items)
 
-plt.title("MPC Cost Components Over Time", fontsize=14)
+# Create subplots dynamically, sharing the X-axis to keep it clean
+# We scale the figure height (3 * num_plots) so the plots don't look squished
+fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=True)
+
+# Ensure 'axes' is always iterable even if there is only 1 valid cost component
+if num_plots == 1:
+    axes = [axes]
+
+# Plot each valid component on its own subplot (ax)
+for ax, (key, values) in zip(axes, valid_items):
+    ax.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
+    ax.set_title(f"{key.capitalize()} Cost", fontsize=12)
+    ax.set_ylabel("Cost (Log)", fontsize=10)
+    ax.set_yscale("log") # Log scale
+    ax.grid(True, which="both", ls="--", alpha=0.5)
+    ax.legend(loc="upper right")
+
+# Set global labels and layout
 plt.xlabel("Iteration Step", fontsize=12)
-plt.ylabel("Cost Value (Log Scale)", fontsize=12)
-plt.yscale("log") # Log scale 
-plt.grid(True, which="both", ls="--", alpha=0.5)
-plt.legend(loc="upper right")
+plt.suptitle("MPC Cost Components Over Time", fontsize=14, y=1.02) # y pushes the title slightly up
 plt.tight_layout()
 plt.show()
 
-# Open a window you can rotate to see the 3D flight paths
+# Open a bird eye view to see the 2D flight paths
 plot_results(drones, map3d.obstacles)
 
 # Plot the apllied inputs and velocities
