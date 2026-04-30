@@ -1,0 +1,3 @@
+Seed 77, 30 obs, overlap factor 0.5: 99.88% ; Mean Energy: 5626 [J]
+Seed 77, 30 obs, overlap factor 0.3: 99.16% ; Mean Energy: 4598 [J]
+Seed 77, 30 obs, overlap factor 0.1: 97.72% ; Mean Energy: 4033 [J]

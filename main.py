@@ -23,7 +23,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption
 
 def build_demo(config): 
     # Load environment configuration
@@ -208,12 +208,18 @@ if __name__ == "__main__":
         
         # Check if ALL drones have finished their tasks (including the RTH waypoint)
         all_done = all_done = all(d.is_parked for d in drones)
+
         if all_done:
             print(f"\nMission accomplished in {num_iter} steps!")
             
             average_time = total_solver_time / total_solver_calls
-            #print(f"Total Solver Calls: {total_solver_calls}")
             print(f"Avg Solve Time: {average_time:.5f} seconds")
+            
+            # --- NEW: Show the Power Analysis ---
+            print("\nGenerating Energy Consumption Report...")
+            mean_energy = plot_energy_consumption(drones, dt, mass=1.0) # Adjust mass if your drones are heavier
+            print(f"Mean energy [J]: {mean_energy}")
+            
             break
 
         for i, drone in enumerate(drones):
@@ -247,6 +253,7 @@ if __name__ == "__main__":
                 
                 drone.history_p.append(drone.state["p"].copy())
                 drone.history_a.append(np.zeros(3))
+                drone.history_v.append(np.zeros(3))
 
                 if hasattr(drone, 'history_predictions'):
                     drone.history_predictions.append(stationary_traj)
@@ -295,6 +302,8 @@ if __name__ == "__main__":
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
             drone.history_a.append(accel)
+            drone.history_v.append(drone.state["v"].copy())
+
             # Save the applied acceleration so the next loop can calculate jerk
             drone.state["a"] = accel
 

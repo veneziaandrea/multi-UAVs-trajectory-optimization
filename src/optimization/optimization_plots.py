@@ -261,3 +261,123 @@ def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
     
     plt.tight_layout()
     plt.show()
+
+import numpy as np
+
+def calculate_trajectory_energy(history_v, history_a, dt, mass=1.0):
+    """
+    Estimates the power (Watts) and total energy (Joules) of a drone's flight.
+    
+    history_v: List or (N, 3) numpy array of velocities [vx, vy, vz]
+    history_a: List or (N, 3) numpy array of accelerations [ax, ay, az]
+    dt: Timestep of the simulation (e.g., 0.05s)
+    mass: Mass of the drone in kg
+    """
+    v_arr = np.array(history_v)
+    a_arr = np.array(history_a)
+    
+    # Constants
+    g = np.array([0.0, 0.0, 9.81])  # Gravity vector [m/s^2]
+    rho = 1.225                     # Air density [kg/m^3]
+    prop_area = 0.05                # Total swept area of propellers [m^2]
+    c_drag = 0.25                   # Empirical drag coefficient of the drone frame
+    efficiency = 0.7                # Motor/Propeller electrical efficiency
+    
+    # HOVER POWER (Constant)
+    # Based on Momentum Theory: P = T * sqrt(T / 2*rho*A)
+    thrust_hover = mass * 9.81
+    p_hover = thrust_hover * np.sqrt(thrust_hover / (2 * rho * prop_area))
+    
+    # MECHANICAL POWER (Dynamic)
+    # Force required to generate the commanded acceleration AND fight gravity
+    # F = m * (a + g)
+    F_thrust = mass * (a_arr + g)
+    
+    # Power is the dot product of Force and Velocity (P = F dot V)
+    # Using np.sum with axis=1 does a row-wise dot product
+    p_mech = np.sum(F_thrust * v_arr, axis=1)
+    
+    # NOTE: Multirotors cannot efficiently regenerate power when braking. 
+    # If p_mech is negative, the energy is mostly lost as heat. We clamp it to 0.
+    p_mech = np.maximum(p_mech, 0)
+    
+    # DRAG POWER (Dynamic)
+    # P_drag = drag_coeff * |v|^3
+    v_norm = np.linalg.norm(v_arr, axis=1)
+    p_drag = c_drag * (v_norm ** 3)
+    
+    # --- TOTALS ---
+    # Divide mechanical/drag work by motor efficiency to get electrical draw
+    power_watts = p_hover + ((p_mech + p_drag) / efficiency)
+    
+    # Energy (Joules) = Power * Time
+    total_energy_joules = np.sum(power_watts) * dt
+    
+    return power_watts, total_energy_joules
+
+    import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_energy_consumption(drones, dt, mass=1.0):
+    """
+    Plots instantaneous power and total energy for the entire swarm.
+    """
+    # Create a figure with two subplots stacked vertically
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [2, 1]})
+    
+    drone_ids = []
+    total_energies = []
+    colors = plt.cm.tab10(np.linspace(0, 1, len(drones))) # Distinct colors for each drone
+    
+    for i, drone in enumerate(drones):
+        # Safety check
+        if not hasattr(drone, 'history_v') or len(drone.history_v) == 0:
+            print(f"Warning: No velocity data for Drone {drone.id}. Skipping plot.")
+            continue
+            
+        power_watts, total_energy = calculate_trajectory_energy(
+            drone.history_v, drone.history_a, dt, mass
+        )
+        
+        time_axis = np.arange(len(power_watts)) * dt
+        
+        # --- TOP PLOT: Instantaneous Power (Watts) ---
+        ax1.plot(time_axis, power_watts, label=f'Drone {drone.id} ({total_energy:.0f} J)', 
+                 color=colors[i], linewidth=2, alpha=0.8)
+        
+        # Store data for the bar chart
+        drone_ids.append(f"Drone {drone.id}")
+        total_energies.append(total_energy)
+
+   # Calculate mean energy using the existing total_energies list
+    mean_energy = sum(total_energies) / len(total_energies)
+        
+    # Formatting Top Plot
+    ax1.set_title("Swarm Instantaneous Power Consumption", fontsize=14, fontweight='bold')
+    ax1.set_xlabel("Time (Seconds)", fontsize=12)
+    ax1.set_ylabel("Power (Watts)", fontsize=12)
+    ax1.grid(True, linestyle='--', alpha=0.6)
+    ax1.legend(loc='upper right')
+    
+    # --- BOTTOM PLOT: Total Energy Bar Chart (Joules) ---
+    if total_energies:
+        bars = ax2.bar(drone_ids, total_energies, color=colors, alpha=0.8, edgecolor='black')
+        
+        ax2.set_title("Total Energy Consumed Per Drone", fontsize=14, fontweight='bold')
+        ax2.set_ylabel("Total Energy (Joules)", fontsize=12)
+        ax2.grid(axis='y', linestyle='--', alpha=0.6)
+        
+        # Add the exact Joule value on top of each bar
+        for bar in bars:
+            yval = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2, yval + (max(total_energies)*0.05), 
+                     f'{yval:.0f} J', ha='center', va='bottom', fontsize=11, fontweight='bold')
+        
+        # Add the mean energy dashed line and legend
+        ax2.axhline(y=mean_energy, color='red', linestyle='--', linewidth=2, label=f'Mean Energy: {mean_energy:.0f} J')
+        ax2.legend(loc='upper right')
+             
+    plt.tight_layout()
+    plt.show()
+
+    return mean_energy

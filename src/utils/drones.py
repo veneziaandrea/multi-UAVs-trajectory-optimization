@@ -30,6 +30,7 @@ class Drone:
         self.history_p = []
         self.history_predictions = []
         self.history_a = []
+        self.history_v = []
 
         # flags to consider return to home and end of task 
         self.returning_home = False
