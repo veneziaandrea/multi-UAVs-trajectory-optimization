@@ -1,3 +1,23 @@
 Seed 77, 30 obs, overlap factor 0.5: 99.88% ; Mean Energy: 5626 [J]
 Seed 77, 30 obs, overlap factor 0.3: 99.16% ; Mean Energy: 4598 [J]
 Seed 77, 30 obs, overlap factor 0.1: 97.72% ; Mean Energy: 4033 [J]
+
+Seed 42, 30 obs, overlap factor 0.5: 99.91% ; Mean Energy: 5893 [J]
+Seed 42, 30 obs, overlap factor 0.3: 99.44% ; Mean Energy: 4803 [J]
+Seed 42, 30 obs, overlap factor 0.1: 98.43% ; Mean Energy: 3907 [J]
+
+Seed 48, 30 obs, overlap factor 0.5: 99.83% ; Mean Energy: 5196 [J]
+Seed 48, 30 obs, overlap factor 0.3: 99.11% ; Mean Energy: 4375 [J]
+Seed 48, 30 obs, overlap factor 0.1: 97.67% ; Mean Energy: 3643 [J]
+
+Seed 68, 30 obs, overlap factor 0.5: 99.89% ; Mean Energy: 5622 [J]
+Seed 68, 30 obs, overlap factor 0.3: 99.01% ; Mean Energy: 4790 [J]
+Seed 68, 30 obs, overlap factor 0.1: 97.19% ; Mean Energy: 4259 [J]
+
+Seed 69, 30 obs, overlap factor 0.5: 99.98% ; Mean Energy: 5262 [J]
+Seed 69, 30 obs, overlap factor 0.3: 99.64% ; Mean Energy: 4601 [J] --> Collision at start for one drone, spawned very near obstacle with wp at the very opposite
+Seed 69, 30 obs, overlap factor 0.1: 98.52% ; Mean Energy: 4612 [J]
+
+Seed 7, 30 obs, overlap factor 0.5: 99.80% ; Mean Energy: 5324 [J]
+Seed 7, 30 obs, overlap factor 0.3: 99.18% ; Mean Energy: 4246 [J]
+Seed 7, 30 obs, overlap factor 0.1: 98.26% ; Mean Energy: 4083 [J]
