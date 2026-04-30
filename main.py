@@ -63,7 +63,8 @@ def build_demo(config):
 
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
-    k = math.ceil(1.0 * A_map/A_FOV)
+    overlap = 0.5
+    k = math.ceil(A_map/(A_FOV*(1-overlap)))
 
     print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
     print(f"Map area = {A_map} m^2")
