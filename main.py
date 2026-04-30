@@ -63,13 +63,8 @@ def build_demo(config):
 
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
-<<<<<<< HEAD
     overlap = 0.5 # Overlap factor to increase redundancy and ensure a better coverage
     k = math.ceil(A_map/(A_FOV*(1 - overlap)))
-=======
-    overlap = 0.5
-    k = math.ceil(A_map/(A_FOV*(1-overlap)))
->>>>>>> Sereno-Branch
 
     print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
     print(f"Map area = {A_map} m^2")
@@ -83,13 +78,7 @@ def build_demo(config):
         )   
 
     # 2. Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
-<<<<<<< HEAD
-    config_path = CONFIGS / "optimization_params.json"
-    config = load_config(config_path)
-    safe_margin =  config["constraints"]["safe_distance"] + 0.5
-=======
     safe_margin = opt_config["constraints"]["safe_distance"] + 0.5
->>>>>>> Sereno-Branch
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
