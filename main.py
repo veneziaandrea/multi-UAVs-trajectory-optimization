@@ -23,7 +23,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map
 
 def build_demo(config): 
     # Load environment configuration
@@ -40,7 +40,7 @@ def build_demo(config):
         obstacle_radius_range=map_cfg["obstacle_radius_range"],
         obstacle_height_range=map_cfg["obstacle_height_range"],
         num_drones=uav_cfg["num_uavs"],                 
-        spacing=uav_cfg["start_separation"],                       
+        spacing=uav_cfg["start_separation"],                     
         seed=seed,
     )
     print(f"Generated map with {len(map3d.obstacles)} obstacles and {len(drone_positions)} drone starting positions.")
@@ -49,18 +49,27 @@ def build_demo(config):
     for i, pos in enumerate(drone_positions):
         print(f"  Drone {i+1}: {pos}")
 
-    #Sto assumendo camera con un FOV diagonale di 84° (abbastanza largo) a un'altezza h dal terreno
-    H_FOV = 71.1 #Horizontal FOV is equal to 71.1°
-    V_FOV = 56.3 #Vertical FOV is equal to 56.3°
-    h = 5 #Distanza del drone dal livello 0 del terreno
+    # COMPUTATION OF AREA COVERED BY EACH CAMERA AND DEDUCTION OF K WAYPOINTS
+    # "FOV" is the diagonal FOV of the cameras (84° in this case)
+    FOV_rad = math.radians(uav_cfg["camera_FOV"])
+    aspect_ratio = uav_cfg["camera_aspect_ratio"]
+    config_path = CONFIGS / "optimization_params.json"
+    opt_config = load_config(config_path)
+    h = opt_config["cost"]["z_ref"] # Distanza del drone dal livello 0 del terreno
+    d = 2 * h * math.tan(FOV_rad/2) # Lunghezza diagonale dell'immagine delle camere
 
-    L = 2* h * math.tan(math.radians(H_FOV/2)) # Largehzza immagine
-    W = 2* h * math.tan(math.radians(V_FOV/2)) # Altezza immagine
+    W = d / math.sqrt(aspect_ratio**2 + 1) # Altezza immagine
+    L = W * aspect_ratio # Largehzza immagine
 
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
+<<<<<<< HEAD
     overlap = 0.5 # Overlap factor to increase redundancy and ensure a better coverage
     k = math.ceil(A_map/(A_FOV*(1 - overlap)))
+=======
+    overlap = 0.5
+    k = math.ceil(A_map/(A_FOV*(1-overlap)))
+>>>>>>> Sereno-Branch
 
     print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
     print(f"Map area = {A_map} m^2")
@@ -74,9 +83,13 @@ def build_demo(config):
         )   
 
     # 2. Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+<<<<<<< HEAD
     config_path = CONFIGS / "optimization_params.json"
     config = load_config(config_path)
     safe_margin =  config["constraints"]["safe_distance"] + 0.5
+=======
+    safe_margin = opt_config["constraints"]["safe_distance"] + 0.5
+>>>>>>> Sereno-Branch
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
@@ -98,7 +111,7 @@ def build_demo(config):
         map3D=map3d,
     )
 
-    return map3d, vor, drone_positions, waypoints
+    return L, W, map3d, vor, drone_positions, waypoints
 
 
 if __name__ == "__main__":
@@ -110,7 +123,7 @@ if __name__ == "__main__":
     seed_everything(config["seed"])
 
     # Build the demo environment and get initial drone positions
-    map3d, vor, drone_positions, waypoints = build_demo(config)
+    L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
     
     # Visualize the Voronoi partition together with obstacles and initial drone positions
     plot_voronoi_partition(
@@ -181,7 +194,7 @@ if __name__ == "__main__":
         
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dist_threshold = 0.8 # Distance to mark a waypoint as 'seen' [m]
+    dist_threshold = 0.3 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     ego_accel_prev = 0
@@ -373,3 +386,11 @@ map_limits = [ map_cfg["x_bounds"],
             map_cfg["z_bounds"]
             ]
 animate_simulation(drones, map3d.obstacles, map_limits)
+
+# 1. Calcola e ottieni la griglia
+res = 0.2 # Resolution
+final_coverage_pct, coverage_grid = calculate_final_coverage(drones, map_limits, L, W, res)
+print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+
+# 2. Plotta la mappa Seen/Unseen
+plot_coverage_map(coverage_grid, map_limits, res, map3d.obstacles, drones)

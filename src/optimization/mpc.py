@@ -963,4 +963,4 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         braking_accel = -current_state["v"] 
         fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()}
         solve_time = 0 # fallback shouldn't contaminate the real value
-        return braking_accel, last_traj, cost_value, fallback_components, solve_time
+        return braking_accel, last_traj, cost_value, fallback_components, solve_time        
