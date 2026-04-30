@@ -57,16 +57,10 @@ def build_demo(config):
     L = 2* h * math.tan(math.radians(H_FOV/2)) # Largehzza immagine
     W = 2* h * math.tan(math.radians(V_FOV/2)) # Altezza immagine
 
-<<<<<<< Updated upstream
-    A_FOV = L * W
-    A_map = map3d.x_bounds[1] * map3d.y_bounds[1]
-    k = math.ceil(1.2 * A_map/A_FOV)
-=======
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
-    overlap = 0.3 # Overlap factor to increase redundancy and ensure a better coverage
+    overlap = 0.5 # Overlap factor to increase redundancy and ensure a better coverage
     k = math.ceil(A_map/(A_FOV*(1 - overlap)))
->>>>>>> Stashed changes
 
     print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
     print(f"Map area = {A_map} m^2")
