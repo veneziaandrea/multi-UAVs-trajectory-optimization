@@ -204,6 +204,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     B_init = opti.parameter(1)
     
     p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
+    r_obs_closest = opti.parameter((N+1) * k_obs)
     p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
@@ -273,63 +274,67 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         batt_term = w_batt * ca.sumsqr(v[:, k])
         cost_components["battery"] += batt_term
         cost += batt_term
-
-    # 3. MICRO-PENALTIES (To prevent IPOPT from crashing on unused variables)
-    cost += 1e-8 * ca.sumsqr(B) # B is declared but unused in constraints
-
-    # Definire una distanza di influenza (es. raggio di sicurezza + 0.5m)
-    #dist_influence = safe_rad + 2.5
-        
-# --- OBSTACLES (Linearized for QP / Fast SQP) ---
+                
+        # --- OBSTACLES (Linearized for QP with Dynamic Radii) ---
     if enable_obstacles:
         slack_term = 0
-        #step_barrier = 0
+        step_barrier = 0
+
+        dist_influence = safe_rad + 1.5
         
         for k in range(1, N+1):
             for j in range(k_obs):
-                #col_idx = k * k_obs + j
-                #dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
-                #dist_bar_sqr = ca.sumsqr(dp_bar)
-                
-                # Penalità quadratica (Barrier QP-compatibile)
-                # Si attiva solo se il drone entra nel raggio di influenza
-                #barrier_val = w_barrier * ca.fmax(0, dist_influence**2 - dist_bar_sqr)**2
-                #step_barrier += barrier_val
 
                 # 1. Slack Cost (Quadratic L2 is perfect for QP solvers)
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
                 
-                # 2. LINEARIZED COLLISION CONSTRAINTS (Strictly 2D!)
                 col_idx = k * k_obs + j
+                
+                # --- NEW: DYNAMIC RADII MATH ---
+                # Extract the specific radius for this obstacle at this timestep
+                current_obs_radius = r_obs_closest[col_idx]
+                # Combine the drone's physical buffer with the obstacle's actual size
+                total_safe_dist = safe_rad + current_obs_radius
                 
                 # Vector from obstacle center to drone's PREVIOUS predicted position
                 dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
                 dist_bar_sqr = ca.sumsqr(dp_bar)
+
+                # Penalità quadratica (Barrier QP-compatibile)
+                # Si attiva solo se il drone entra nel raggio di influenza
+                barrier_val = w_barrier * ca.fmax(0, dist_influence*2 - dist_bar_sqr)*2
+                step_barrier += barrier_val
                 
                 # First-order Taylor Expansion (The Separating Hyperplane)
                 linear_term = 2 * ca.dot(dp_bar, (p[:2, k] - p_ego_prev[:2, k]))
             
                 # The Convex Constraint
-                opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= safe_rad**2)
+                # CRITICAL: Since LHS is based on squared distance, RHS must be (total_safe_dist)^2
+                opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= total_safe_dist**2)
                 
-                # NOTE: The exponential barrier has been removed 
-                # QP solvers cannot process ca.exp().
-                # Exponential Barrier
-                '''
-                shape_factor = cost_cfg["shape_factor"]
-                step_barrier_val = w_barrier * ca.exp((safe_rad**2 - dist_bar_sqr) / shape_factor)
-                step_barrier += step_barrier_val
-                '''
-        # Add everything to the total cost once the loop finishes
+        # Add to total cost
         cost += slack_term
+        cost += step_barrier
         cost_components["slack"] += slack_term
-        
-        #cost += step_barrier
-        #cost_components["barrier"] += step_barrier
+        cost_components["barrier"] += step_barrier
         
     else:
-        # Dummy cost to prevent singular matrices
         cost += 1e-8 * ca.sumsqr(eps_obs)
+                
+        # NOTE: The exponential barrier has been removed 
+        # QP solvers cannot process ca.exp().
+        # Exponential Barrier
+        '''
+        shape_factor = cost_cfg["shape_factor"]
+        step_barrier_val = w_barrier * ca.exp((safe_rad**2 - dist_bar_sqr) / shape_factor)
+        step_barrier += step_barrier_val
+        '''
+    # Add everything to the total cost once the loop finishes
+    cost += slack_term
+    cost_components["slack"] += slack_term
+    
+    cost += step_barrier
+    # cost_components["barrier"] += step_barrier
     
     opti.minimize(cost)
 
@@ -415,7 +420,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "a_ego_prev": a_ego_prev, 
-        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "p_obs_closest": p_obs_closest,"r_obs_closest": r_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, 
         "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh, "w_seen": w_seen
     }
@@ -643,7 +648,8 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     v_init = opti.parameter(3)
     B_init = opti.parameter(1)
     
-    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
+    p_obs_closest = opti.parameter(3, (N+1) * k_obs)
+    r_obs_closest = opti.parameter((N+1) * k_obs) 
     p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
     p_wp = opti.parameter(3, num_regions) 
     flag = opti.parameter(num_regions)
@@ -812,13 +818,13 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
         "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "a_ego_prev": a_ego_prev, 
-        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
+        "p_obs_closest": p_obs_closest, "r_obs_closest": r_obs_closest, "p_neighbors": p_neighbors,
         "k_search": num_regions, "k_obs": k_obs, 
-        "cost_components": cost_components, "eps_obs": eps_obs
+        "cost_components": cost_components, "eps_obs": eps_obs, "w_seen": w_seen
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree, current_w_seen):
+                      last_traj, neighbor_trajs, obs_tree, obstacles, current_w_seen):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -884,13 +890,20 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     num_points = last_traj.shape[1]
     closest_obs_coords = np.zeros((3, num_points * k_obs))
     
+    r_obs_closest_array = np.zeros(num_points * k_obs) 
+    
     for k in range(num_points):
         for j in range(k_obs):
             obs_idx = indices_obs[k, j]
             col_idx = k * k_obs + j
+            
+            # Fill the coordinates
             closest_obs_coords[:, col_idx] = obs_tree.data[obs_idx]
+            
+            # Extract the actual radius from your global obstacles list
+            r_obs_closest_array[col_idx] = obstacles[obs_idx].radius 
 
-    # --- 4. SET PARAMETERS ---
+     # --- 4. SET PARAMETERS ---
     opti.set_value(mpc_vars["p_init"], current_state["p"])
     opti.set_value(mpc_vars["v_init"], current_state["v"])
     opti.set_value(mpc_vars["B_init"], current_state["B"])
@@ -900,6 +913,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     
     opti.set_value(mpc_vars["p_ego_prev"], last_traj)
     opti.set_value(mpc_vars["p_obs_closest"], closest_obs_coords)
+    opti.set_value(mpc_vars["r_obs_closest"], r_obs_closest_array) 
     opti.set_value(mpc_vars["a_ego_prev"], current_state["a"])
 
     opti.set_value(mpc_vars["w_seen"], current_w_seen)

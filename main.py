@@ -12,6 +12,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+CONFIGS = ROOT / "configs"
+
 from config import load_config, seed_everything
 from environment.map_generation_v2 import Map3D
 from utils.plot_initial_envronment import plot_initial_environment
@@ -77,9 +79,10 @@ def build_demo(config):
             seed=seed,
         )   
 
-    # 2. FIX: Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.25m)
-    # ho messo 1 invece di importare safe_distance dal file config perchè non avevo sbatti
-    safe_margin = 1.5 + 0.25   
+    # 2. Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+    config_path = CONFIGS / "optimization_params.json"
+    config = load_config(config_path)
+    safe_margin =  config["constraints"]["safe_distance"] + 0.5
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # --- Voronoi Partition --- 
@@ -131,6 +134,8 @@ if __name__ == "__main__":
     obs_radii = np.array([obs.radius for obs in map3d.obstacles])
     # Create obstacles object in a way that is actually fast to use 
     obs_tree = KDTree(obstacle_coords)
+    obstacles = map3d.obstacles
+
     wp_tree = KDTree(waypoints)
 
     # SETUP MPC
@@ -272,7 +277,7 @@ if __name__ == "__main__":
             accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree, current_w_seen
+                drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, current_w_seen
             )
 
             total_solver_time += t_solve_mpc
