@@ -118,49 +118,58 @@ def animate_simulation(drones, obstacles, map_limits):
 
 def plot_kinematics(drones, dt):
     """
-    Plots the velocity and acceleration profiles of the drones over time,
-    displaying their average values in the legend.
+    Plots velocity (top row) and acceleration (bottom row) in a grid,
+    where each column corresponds to one drone.
     """
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    num_drones = len(drones)
+    # Create a 2-row grid: Row 0 for Velocity, Row 1 for Acceleration
+    fig, axes = plt.subplots(2, num_drones, figsize=(4 * num_drones, 8), sharex=True)
+    
+    # Ensure axes is a 2D array even if there is only one drone
+    if num_drones == 1:
+        axes = axes.reshape(2, 1)
+
     colors = ['blue', 'green', 'magenta', 'cyan', 'orange']
 
     for i, drone in enumerate(drones):
         path = np.array(drone.history_p)
+        col_color = colors[i % len(colors)]
         
-        # Need at least 3 points to calculate acceleration
-        if len(path) > 2:
-            # 1. Calculate Velocity (Derivative of Position)
+        # 1. Calculate and Plot Velocity (Top Row)
+        ax_v = axes[0, i]
+        if len(path) > 1:
             velocities = np.diff(path, axis=0) / dt
             v_mag = np.linalg.norm(velocities, axis=1)
             time_v = np.arange(len(v_mag)) * dt
             avg_v = np.mean(v_mag)
             
-            ax1.plot(time_v, v_mag, color=colors[i % len(colors)], linewidth=2,
-                     label=f'Drone {drone.id} (Avg: {avg_v:.2f} m/s)')
+            ax_v.plot(time_v, v_mag, color=col_color, linewidth=2,
+                      label=f'Avg: {avg_v:.2f} m/s')
+            
+            ax_v.set_title(f"Drone {drone.id} Velocity", fontsize=12)
+            ax_v.set_ylabel("Vel [m/s]", fontsize=10)
+            ax_v.grid(True, ls="--", alpha=0.5)
+            ax_v.legend(loc="upper right", fontsize='small')
 
-            # Formatting Velocity Plot
-            ax1.set_title("Drone Velocity Profile", fontsize=14)
-            ax1.set_ylabel("Velocity Magnitude [m/s]", fontsize=12)
-            ax1.grid(True, which="both", ls="--", alpha=0.5)
-            ax1.legend(loc="upper right")
+        # 2. Plot Acceleration (Bottom Row)
+        ax_a = axes[1, i]
+        if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
+            true_accel = np.array(drone.history_a)
+            a_mag = np.linalg.norm(true_accel, axis=1)
+            time_a = np.arange(len(a_mag)) * dt
+            avg_a = np.mean(a_mag)
+            
+            ax_a.plot(time_a, a_mag, color=col_color, linewidth=2,
+                      label=f'Avg: {avg_a:.2f} m/s²')
+            
+            ax_a.set_title(f"Drone {drone.id} Acceleration", fontsize=12)
+            ax_a.set_ylabel("Acc [m/s²]", fontsize=10)
+            ax_a.set_xlabel("Time [s]", fontsize=10)
+            ax_a.grid(True, ls="--", alpha=0.5)
+            ax_a.legend(loc="upper right", fontsize='small')
 
-            # 2. Plot Acceleration (From the solver directly)
-            # Make sure we have acceleration data logged
-            if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
-                true_accel = np.array(drone.history_a)
-                a_mag = np.linalg.norm(true_accel, axis=1)
-                
-                # Match the time array length
-                time_a = np.arange(len(a_mag)) * dt
-                avg_a = np.mean(a_mag)
-                
-                ax2.plot(time_a, a_mag, color=colors[i % len(colors)], linewidth=2,
-                            label=f'Drone {drone.id} (Avg: {avg_a:.2f} m/s²)')
-                ax2.set_title("Drone Acceleration Profile", fontsize = 14)
-                 # Formatting Acceleration Plot
-                ax2.set_ylabel("Acceleration Magnitude [m/s]", fontsize=12)
-                ax2.grid(True, which="both", ls="--", alpha=0.5)
-                ax2.legend(loc="upper right")
+    plt.tight_layout()
+    plt.show()
 
 def calculate_final_coverage(drones, map_limits, L, W, res=0.5):
     x_range = np.arange(map_limits[0][0], map_limits[0][1], res)

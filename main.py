@@ -56,6 +56,7 @@ def build_demo(config):
     config_path = CONFIGS / "optimization_params.json"
     opt_config = load_config(config_path)
     h = opt_config["cost"]["z_ref"] # Distanza del drone dal livello 0 del terreno
+    overlap = opt_config["constraints"]["overlap_factor"] # Overlap factor to increase redundancy and ensure a better coverage
     d = 2 * h * math.tan(FOV_rad/2) # Lunghezza diagonale dell'immagine delle camere
 
     W = d / math.sqrt(aspect_ratio**2 + 1) # Altezza immagine
@@ -63,7 +64,6 @@ def build_demo(config):
 
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
-    overlap = 0.5 # Overlap factor to increase redundancy and ensure a better coverage
     k = math.ceil(A_map/(A_FOV*(1 - overlap)))
 
     print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
