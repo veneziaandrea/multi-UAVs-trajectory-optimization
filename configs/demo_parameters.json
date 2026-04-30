@@ -14,6 +14,8 @@
         "max_speed": 5.0,
         "max_acceleration": 2.0,
         "altitude": 5.0,
-        "start_separation": 1.5
+        "start_separation": 1.5,
+        "camera_FOV": 84,
+        "camera_aspect_ratio": 1.3333
     }
 }
