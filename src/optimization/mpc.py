@@ -254,7 +254,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
             cost += wp_term
         '''
 
-    # 2. Control Effort AKA Jerk & Z-Reference & Battery
+    # 2. Control Effort AKA Jerk limitation & Z-Reference & Battery
     for k in range(N):
         
         # --- JERK MATH ---
@@ -285,12 +285,12 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         for k in range(1, N+1):
             for j in range(k_obs):
 
-                # 1. Slack Cost (Quadratic L2 is perfect for QP solvers)
+                # 1. Slack Cost 
                 slack_term += w_slack * ca.sumsqr(eps_obs[j, k])
                 
                 col_idx = k * k_obs + j
                 
-                # --- NEW: DYNAMIC RADII MATH ---
+                # --- DYNAMIC RADII MATH ---
                 # Extract the specific radius for this obstacle at this timestep
                 current_obs_radius = r_obs_closest[col_idx]
                 # Combine the drone's physical buffer with the obstacle's actual size
@@ -300,8 +300,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
                 dist_bar_sqr = ca.sumsqr(dp_bar)
 
-                # Penalità quadratica (Barrier QP-compatibile)
-                # Si attiva solo se il drone entra nel raggio di influenza
+                # Quadratic Barrier Function
                 barrier_val = w_barrier * ca.fmax(0, dist_influence*2 - dist_bar_sqr)*2
                 step_barrier += barrier_val
                 
@@ -309,7 +308,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 linear_term = 2 * ca.dot(dp_bar, (p[:2, k] - p_ego_prev[:2, k]))
             
                 # The Convex Constraint
-                # CRITICAL: Since LHS is based on squared distance, RHS must be (total_safe_dist)^2
+                # Since LHS is based on squared distance, RHS must be (total_safe_dist)^2
                 opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= total_safe_dist**2)
                 
         # Add to total cost
@@ -321,21 +320,6 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     else:
         cost += 1e-8 * ca.sumsqr(eps_obs)
                 
-        # NOTE: The exponential barrier has been removed 
-        # QP solvers cannot process ca.exp().
-        # Exponential Barrier
-        '''
-        shape_factor = cost_cfg["shape_factor"]
-        step_barrier_val = w_barrier * ca.exp((safe_rad**2 - dist_bar_sqr) / shape_factor)
-        step_barrier += step_barrier_val
-        '''
-    # Add everything to the total cost once the loop finishes
-    cost += slack_term
-    cost_components["slack"] += slack_term
-    
-    cost += step_barrier
-    # cost_components["barrier"] += step_barrier
-    
     opti.minimize(cost)
 
     # --- DYNAMICS CONSTRAINTS ---
@@ -346,10 +330,12 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     opti.subject_to(ca.vec(eps_obs) >= 0)
     opti.subject_to(ca.vec(eps_neigh) >= 0)
 
+    # model kinematics constraints
     for k in range(N):
         opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
         opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
 
+    # state constraints
     opti.subject_to(opti.bounded(-max_acc, a, max_acc))
     opti.subject_to(opti.bounded(-max_vel, v, max_vel))
 
