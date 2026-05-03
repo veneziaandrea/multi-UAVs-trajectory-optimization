@@ -187,13 +187,13 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
 
     opti = ca.Opti('conic')
 
-    # --- Variables (Names kept identical for reusability) ---
+    # --- Variables ---
     p = opti.variable(3, N+1)  
     v = opti.variable(3, N+1)  
     B = opti.variable(1, N+1)  
     a = opti.variable(3, N)    
     eps_obs = opti.variable(k_obs, N+1)
-    eps_neigh = opti.variable(num_neighbors, N+1) # New slack for neighbors
+    eps_neigh = opti.variable(num_neighbors, N+1) 
 
     opti.set_initial(eps_obs, 0.01)
     opti.set_initial(eps_neigh, 0.01)
@@ -220,7 +220,6 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     wp_priorities = np.ones(N+1)
 
     # 1. Waypoints
-
     for i in range(num_regions):
         # i = 0 is the closest unseen waypoint. We give it 100% focus.
         # Future waypoints in the array get 0% focus so they don't hold back the drone

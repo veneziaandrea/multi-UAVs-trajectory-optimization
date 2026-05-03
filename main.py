@@ -170,7 +170,7 @@ if __name__ == "__main__":
         partition_shape = Polygon(current_cell.polygon)
         
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
-        # ORDINA i waypoint prima di creare l'oggetto Drone
+        # Order the waypoints
         waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
 
         # Initialize Drone
