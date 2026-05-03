@@ -28,6 +28,8 @@ class Drone:
     
         # Telemetry history for plotting
         self.history_p = []
+        self.history_sim_p = []
+        self.history_tracking_error = []
         self.history_predictions = []
         self.history_a = []
 

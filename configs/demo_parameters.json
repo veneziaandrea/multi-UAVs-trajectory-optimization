@@ -14,13 +14,24 @@
         "max_speed": 5.0,
         "max_acceleration": 2.0,
         "altitude": 5.0,
+<<<<<<< Updated upstream
         "start_separation": 1.5
+=======
+        "start_separation": 1.5,
+        "camera_FOV": 84,
+        "camera_aspect_ratio": 1.3333
+>>>>>>> Stashed changes
     },
     "pybullet": {
         "enabled": true,
         "gui": true,
         "real_time": true,
         "drone_radius": 0.5,
+<<<<<<< Updated upstream
         "drone_visual": "quadrotor"
+=======
+        "drone_visual": "quadrotor",
+        "noise": 0.5
+>>>>>>> Stashed changes
     }
 }

@@ -1,9 +1,21 @@
 import numpy as np
 import sys
+import os
 from pathlib import Path
 import math
 from scipy.spatial import KDTree
 from shapely.geometry import Polygon
+
+PYTHON_BASE = Path(sys.base_prefix)
+if "TCL_LIBRARY" not in os.environ:
+    tcl_library = PYTHON_BASE / "tcl" / "tcl8.6"
+    if tcl_library.exists():
+        os.environ["TCL_LIBRARY"] = str(tcl_library)
+if "TK_LIBRARY" not in os.environ:
+    tk_library = PYTHON_BASE / "tcl" / "tk8.6"
+    if tk_library.exists():
+        os.environ["TK_LIBRARY"] = str(tk_library)
+
 import matplotlib.pyplot as plt
 
 # Set the root directory and add the source directory to the Python path
@@ -21,8 +33,13 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
+<<<<<<< Updated upstream
 from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics
 from simulator.pybullet_simulator import Simulator
+=======
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, plot_tracking_error, print_collision_report
+from simulation.simulator import Simulator
+>>>>>>> Stashed changes
 
 def build_demo(config): 
     # Load environment configuration
@@ -99,6 +116,7 @@ def build_demo(config):
 
 
 if __name__ == "__main__":
+<<<<<<< Updated upstream
     env_config_path = ROOT / "configs" / "demo_parameters.json"
     env_config = load_config(env_config_path)
 
@@ -106,6 +124,19 @@ if __name__ == "__main__":
 
     map3d, vor, drone_positions, waypoints = build_demo(env_config)
 
+=======
+    # Load configuration
+    demo_config_path = ROOT / "configs" / "demo_parameters.json"
+    demo_config = load_config(demo_config_path)
+
+    # Set random seed for reproducibility
+    seed_everything(demo_config["seed"])
+
+    # Build the demo environment and get initial drone positions
+    L, W, map3d, vor, drone_positions, waypoints = build_demo(demo_config)
+    
+    # Visualize the Voronoi partition together with obstacles and initial drone positions
+>>>>>>> Stashed changes
     plot_voronoi_partition(
         map3d,
         vor,
@@ -120,9 +151,16 @@ if __name__ == "__main__":
     PRINT_INTERVAL = 10
     num_neighbors = len(drone_positions) - 1
 
+<<<<<<< Updated upstream
     opt_config_path = ROOT / "configs" / "optimization_params.json"
     opt_config = load_config(opt_config_path)
     mpc_cfg = opt_config["mpc"]
+=======
+    # take the prediction horizon and time interval from config file
+    optimization_config_path = ROOT / "configs" / "optimization_params.json"
+    optimization_config = load_config(optimization_config_path)
+    mpc_cfg = optimization_config["mpc"]
+>>>>>>> Stashed changes
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
     max_iter = mpc_cfg["max_iter"]
@@ -149,7 +187,13 @@ if __name__ == "__main__":
         new_drone.is_parked = False
         new_drone.home_pos = drone_positions[id_d]
 
+<<<<<<< Updated upstream
     pybullet_cfg = env_config.get("pybullet", {})
+=======
+    # --- SIMULATOR SETUP ---
+    pybullet_cfg = demo_config.get("pybullet", {})
+    simulator_noise = pybullet_cfg.get("noise", pybullet_cfg.get("noise_level", 0.0))
+>>>>>>> Stashed changes
     simulator = None
     if pybullet_cfg.get("enabled", True):
         simulator = Simulator(
@@ -158,11 +202,20 @@ if __name__ == "__main__":
             dt=dt,
             gui=pybullet_cfg.get("gui", True),
             real_time=pybullet_cfg.get("real_time", True),
+<<<<<<< Updated upstream
             drone_radius=pybullet_cfg.get("drone_radius", 0.1),
             drone_visual=pybullet_cfg.get("drone_visual", "sphere"),
         )
         simulator.sync_all_drones(drones)
 
+=======
+            drone_radius=pybullet_cfg.get("drone_radius"),
+            drone_visual=pybullet_cfg.get("drone_visual"),
+        )
+        simulator.apply_control(drones, simulator_noise)  
+      
+    # --- MAIN MPC LOOP ---
+>>>>>>> Stashed changes
     num_iter = 0
     dist_threshold = 0.8
     dJ_thresh = 1e-6
@@ -179,6 +232,7 @@ if __name__ == "__main__":
 
     total_solver_time = 0.0
     total_solver_calls = 0
+    collision_events = []
 
     while num_iter <= max_iter:
         total_loop_cost = 0.0
@@ -219,13 +273,30 @@ if __name__ == "__main__":
                 if simulator is not None:
                     simulator.sync_drone_state(drone)
                 continue
+<<<<<<< Updated upstream
 
+=======
+            
+            # --- RUN MPC FOR ACTIVE DRONES ---
+            
+            # Collect trajectories from other drones
+>>>>>>> Stashed changes
             neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
             if neighbor_trajs:
                 neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
             else:
                 neighbor_trajs_array = np.empty((3, N + 1, 0))
 
+<<<<<<< Updated upstream
+=======
+            # Decide the weight based on the drone's status
+            if drone.returning_home:
+                current_w_seen = optimization_config["cost"]["w_seen_rth"]
+            else:
+                current_w_seen = optimization_config["cost"]["w_seen"]
+
+            # Run MPC
+>>>>>>> Stashed changes
             accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars,
                 drone.state,
@@ -255,7 +326,13 @@ if __name__ == "__main__":
             drone.state["a"] = accel
 
             if simulator is not None:
+<<<<<<< Updated upstream
                 simulator.sync_drone_state(drone)
+=======
+                simulator.sync_drone_state(drone, simulator_noise)
+
+            if num_iter % PRINT_INTERVAL == 0:
+>>>>>>> Stashed changes
 
             if num_iter % PRINT_INTERVAL == 0:
                 print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
@@ -264,6 +341,7 @@ if __name__ == "__main__":
                 print(f"  Effort:    {cost_breakdown['effort']:.2f}")
                 print(f"  Battery:   {cost_breakdown['battery']:.2f}")
                 print(f"  Slack:     {cost_breakdown['slack']:.2f}")
+<<<<<<< Updated upstream
                 print(f"  Barrier:   {cost_breakdown['barrier']:.2f}")
 
         if simulator is not None:
@@ -272,6 +350,33 @@ if __name__ == "__main__":
             for drone_id, labels in collisions.items():
                 print(f"[PyBullet] Drone {drone_id} collisioni rilevate con: {', '.join(labels)}")
 
+=======
+                print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
+                print(f"  Z Ref: {cost_breakdown['z_ref']:.2f}")
+
+        if simulator is not None and simulator.step():
+            for drone in drones:
+                sim_position = simulator.get_drone_position(drone)
+                if sim_position is None:
+                    continue
+
+                drone.history_sim_p.append(sim_position.copy())
+                if len(drone.history_p) > 0:
+                    tracking_error = np.linalg.norm(drone.history_p[-1] - sim_position)
+                    drone.history_tracking_error.append(float(tracking_error))
+
+            collisions = simulator.get_new_collisions(drones)
+            for drone_id, labels in collisions.items():
+                collision_events.append(
+                    {
+                        "step": num_iter,
+                        "drone_id": drone_id,
+                        "labels": tuple(labels),
+                    }
+                )
+                print(f"[PyBullet] Drone {drone_id} collided with: {', '.join(labels)}")    
+        
+>>>>>>> Stashed changes
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
             break
@@ -281,11 +386,18 @@ if __name__ == "__main__":
 
     print("optimization completed")
 
+<<<<<<< Updated upstream
     print("\n" + "=" * 40)
     print("       OPTIMIZATION COST RECAP")
     print("=" * 40)
     print(f"{'Component':<15} | {'Mean':<10} | {'Max':<10}")
     print("-" * 40)
+=======
+if simulator is not None:
+    simulator.disconnect()
+
+print("optimization completed")
+>>>>>>> Stashed changes
 
     for key, values in cost_history.items():
         if len(values) > 0:
@@ -296,9 +408,17 @@ if __name__ == "__main__":
     valid_items = [(key, values) for key, values in cost_history.items() if len(values) > 0]
     num_plots = len(valid_items)
 
+<<<<<<< Updated upstream
     fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=True)
     if num_plots == 1:
         axes = [axes]
+=======
+print_collision_report(collision_events)
+
+# Filter out empty entries to determine the number of subplots needed
+valid_items = [(key, values) for key, values in cost_history.items() if len(values) > 0]
+num_plots = len(valid_items)
+>>>>>>> Stashed changes
 
     for ax, (key, values) in zip(axes, valid_items):
         ax.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
@@ -316,6 +436,7 @@ if __name__ == "__main__":
     plot_results(drones, map3d.obstacles)
     plot_kinematics(drones, dt)
 
+<<<<<<< Updated upstream
     map_cfg = env_config["map"]
     map_limits = [
         map_cfg["x_bounds"],
@@ -323,3 +444,33 @@ if __name__ == "__main__":
         map_cfg["z_bounds"],
     ]
     animate_simulation(drones, map3d.obstacles, map_limits)
+=======
+# Set global labels and layout
+plt.xlabel("Iteration Step", fontsize=12)
+plt.suptitle("MPC Cost Components Over Time", fontsize=14, y=1.02) # y pushes the title slightly up
+plt.tight_layout()
+plt.show()
+
+# Open a bird eye view to see the 2D flight paths
+plot_results(drones, map3d.obstacles)
+
+# Plot the apllied inputs and velocities
+plot_kinematics(drones, dt)
+plot_tracking_error(drones, dt)
+
+# 2D Animation
+map_cfg = demo_config["map"]
+map_limits = [ map_cfg["x_bounds"],
+            map_cfg["y_bounds"],
+            map_cfg["z_bounds"]
+            ]
+animate_simulation(drones, map3d.obstacles, map_limits)
+
+# 1. Calcola e ottieni la griglia
+res = 0.2 # Resolution
+final_coverage_pct, coverage_grid = calculate_final_coverage(drones, map_limits, L, W, res)
+print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+
+# 2. Plotta la mappa Seen/Unseen
+plot_coverage_map(coverage_grid, map_limits, res, map3d.obstacles, drones)
+>>>>>>> Stashed changes

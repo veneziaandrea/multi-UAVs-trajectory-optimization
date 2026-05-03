@@ -1,7 +1,12 @@
 {
     "cost": {
         "z_ref": 5.0, 
+<<<<<<< Updated upstream
         "w_seen": 3, 
+=======
+        "w_seen": 3,
+        "w_seen_rth": 0.5,
+>>>>>>> Stashed changes
         "w_effort": 10,
         "w_battery": 1,
         "w_z": 0,
@@ -12,7 +17,12 @@
     "constraints": {
         "max_speed": 7.0,
         "max_acceleration": 2.5,
+<<<<<<< Updated upstream
         "safe_distance": 1.5
+=======
+        "safe_distance": 0.75, 
+        "overlap_factor": 0.3
+>>>>>>> Stashed changes
     },
     "mpc": {
         "prediction_horizon": 75,
