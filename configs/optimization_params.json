@@ -5,7 +5,7 @@
         "w_seen_rth": 0.5,
         "w_effort": 10,
         "w_battery": 1,
-        "w_z": 0,
+        "w_z": 2,
         "w_slack_collision": 1e3,
         "w_barrier": 75, 
         "shape_factor": 1.2
@@ -14,13 +14,13 @@
         "max_speed": 7.0,
         "max_acceleration": 2.5,
         "safe_distance": 0.3, 
-        "overlap_factor": 0.1
+        "overlap_factor": 0.3
     },
     "mpc": {
         "prediction_horizon": 50,
         "timestep": 0.05,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 3000
+        "max_iter": 2000
     }
 }

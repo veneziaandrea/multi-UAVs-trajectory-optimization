@@ -315,9 +315,6 @@ def calculate_trajectory_energy(history_v, history_a, dt, mass=1.0):
     
     return power_watts, total_energy_joules
 
-    import matplotlib.pyplot as plt
-import numpy as np
-
 def plot_energy_consumption(drones, dt, mass=1.0):
     """
     Plots instantaneous power and total energy for the entire swarm.

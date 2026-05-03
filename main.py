@@ -316,6 +316,7 @@ if __name__ == "__main__":
                 print(f"  Battery:   {cost_breakdown['battery']:.2f}")
                 print(f"  Slack:     {cost_breakdown['slack']:.2f}")
                 print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
+                print(f"  Z Ref: {cost_breakdown['z_ref']:.2f}")
         
         if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
             print("Converged!")
