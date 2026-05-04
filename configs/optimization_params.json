@@ -13,7 +13,7 @@
     "constraints": {
         "max_speed": 7.0,
         "max_acceleration": 2.5,
-        "safe_distance": 0.75, 
+        "safe_distance": 0.50, 
         "overlap_factor": 0.3
     },
     "mpc": {

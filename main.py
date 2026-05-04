@@ -223,7 +223,7 @@ if __name__ == "__main__":
             break
 
         # In main.py, before the loop:
-        switch_distance = 1.5
+        switch_distance = dist_threshold + 0.25
         
         # The threshold to mark a waypoint as complete MUST be >= the handoff distance
         # Add a tiny buffer (0.1m) so it registers the moment it enters the handoff zone
@@ -256,17 +256,14 @@ if __name__ == "__main__":
                 # Compare drone's current position to the current target
                 dist_to_current = np.linalg.norm(drone.state["p"][:2] - current_target[:2])
                 
-                # The distance to start looking at the next waypoint
-                switch_distance = 1.0
-                
                 # If we are far away, or if this is the very last waypoint, focus 100% on the current one
                 if dist_to_current > switch_distance or len(unseen_wps) < 2:
                     current_focus_vector[0] = 1.0 
                 
                 # If we are close (inside the 1.5m bubble), shift focus to the NEXT waypoint
                 else:
-                    current_focus_vector[0] = 0.7  
-                    current_focus_vector[1] = 0.3  #  pull toward the next waypoint
+                    # current_focus_vector[0] = 0.8 
+                    current_focus_vector[1] = 1.0  #  pull toward the next waypoint
         
             # Check if drone has arrived home
             if drone.returning_home and not drone.is_parked:
