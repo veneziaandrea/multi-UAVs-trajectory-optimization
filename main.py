@@ -20,7 +20,7 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import setup_MPC_QP, run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
+from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
 from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption
@@ -183,7 +183,7 @@ if __name__ == "__main__":
         
     # --- MAIN MPC LOOP ---
     num_iter = 0
-    dist_threshold = 0.3 # Distance to mark a waypoint as 'seen' [m]
+    dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     ego_accel_prev = 0
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         total_loop_cost = 0 # Track sum for the whole fleet
         
         # Check if ALL drones have finished their tasks (including the RTH waypoint)
-        all_done = all_done = all(d.is_parked for d in drones)
+        all_done = all(d.is_parked for d in drones)
 
         if all_done:
             print(f"\nMission accomplished in {num_iter} steps!")
@@ -215,12 +215,19 @@ if __name__ == "__main__":
             average_time = total_solver_time / total_solver_calls
             print(f"Avg Solve Time: {average_time:.5f} seconds")
             
-            # --- NEW: Show the Power Analysis ---
+            # --- Show the Power Analysis ---
             print("\nGenerating Energy Consumption Report...")
             mean_energy = plot_energy_consumption(drones, dt, mass=1.0) # Adjust mass if your drones are heavier
             print(f"Mean energy [J]: {mean_energy}")
             
             break
+
+        # In main.py, before the loop:
+        switch_distance = 1.5
+        
+        # The threshold to mark a waypoint as complete MUST be >= the handoff distance
+        # Add a tiny buffer (0.1m) so it registers the moment it enters the handoff zone
+        # dist_threshold = switch_distance + 0.2
 
         for i, drone in enumerate(drones):
             
@@ -233,6 +240,33 @@ if __name__ == "__main__":
                 home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
                 drone.waypoints = np.vstack([drone.waypoints, home_wp])
                 drone.returning_home = True
+
+            # --- IDENTIFY TARGETS ---
+            # Filter the waypoints to find only the ones that haven't been seen yet
+            unseen_wps = drone.waypoints[drone.waypoints[:, 2] == 0]
+            
+            # Default focus vector (Zeros)
+            current_focus_vector = np.zeros(mpc_cfg["k_wp_search"])
+            
+            if len(unseen_wps) > 0:
+                # The current target is always the first unseen waypoint
+                current_target = unseen_wps[0, :3]
+                
+                # --- CALCULATE DISTANCE IN PYTHON ---
+                # Compare drone's current position to the current target
+                dist_to_current = np.linalg.norm(drone.state["p"][:2] - current_target[:2])
+                
+                # The distance to start looking at the next waypoint
+                switch_distance = 1.0
+                
+                # If we are far away, or if this is the very last waypoint, focus 100% on the current one
+                if dist_to_current > switch_distance or len(unseen_wps) < 2:
+                    current_focus_vector[0] = 1.0 
+                
+                # If we are close (inside the 1.5m bubble), shift focus to the NEXT waypoint
+                else:
+                    current_focus_vector[0] = 0.7  
+                    current_focus_vector[1] = 0.3  #  pull toward the next waypoint
         
             # Check if drone has arrived home
             if drone.returning_home and not drone.is_parked:
@@ -280,7 +314,7 @@ if __name__ == "__main__":
             accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
                 drone.mpc_vars, drone.state, 
                 drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, current_w_seen
+                drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, current_w_seen, current_focus_vector
             )
 
             total_solver_time += t_solve_mpc

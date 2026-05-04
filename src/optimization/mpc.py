@@ -42,119 +42,6 @@ config = load_config(config_path)
 map_config = load_config(CONFIGS/"demo_parameters.json")
 bounds_cfg = map_config["map"]
 
-def setup_MPC_QP(num_neighbors): 
-    # ... [Inizializzazione ROOT, SRC, config...] ...
-
-    cost_cfg = config["cost"]
-    constraints_cfg = config["constraints"]
-    mpc_cfg = config["mpc"]
-
-    w_seen = cost_cfg["w_seen"]
-    w_effort = cost_cfg["w_effort"]
-    w_batt = cost_cfg["w_battery"]
-    #p_hover = cost_cfg["p_hover"]
-    z_ref = cost_cfg["z_ref"]
-    w_z = cost_cfg["w_z"] # Aggiungi questo al JSON, o usa un default
-    w_slack = cost_cfg["w_slack_collision"] # Peso ENORME per le collisioni
-
-    max_vel = constraints_cfg["max_speed"]
-    max_acc = constraints_cfg["max_acceleration"]
-    safe_rad = constraints_cfg["safe_distance"] 
-
-    N = mpc_cfg["prediction_horizon"]
-    dt = mpc_cfg["timestep"]
-    num_regions = mpc_cfg["k_wp_search"]
-    k_obs = mpc_cfg["k_obs_search"]
-
-    opti = ca.Opti("conic")
-
-    # --- Variables ---
-    p = opti.variable(3, N+1)  
-    v = opti.variable(3, N+1)  
-    B = opti.variable(1, N+1)  
-    a = opti.variable(3, N)    
-    
-    # SLACK VARIABLES per evitare i minimi locali
-    eps_obs = opti.variable(k_obs, N+1)
-
-    # --- Parameters ---
-    p_init = opti.parameter(3) 
-    v_init = opti.parameter(3)
-    B_init = opti.parameter(1)
-    
-    p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
-    p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
-    p_wp = opti.parameter(3, num_regions) 
-    flag = opti.parameter(num_regions)
-    p_ego_prev = opti.parameter(3, N+1)
-
-    # --- COST FUNCTION ---
-    cost = 0
-  
-    # 1. Waypoints & Hovering (Battery)
-    for i in range(num_regions):
-        for k in range(1, N + 1): 
-            cost += (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * w_seen
-
-    # 2. Control Effort, Battery (Velocity), and Z-Reference Tracking
-    for k in range(N):
-        cost += w_effort * ca.sumsqr(a[:, k])
-        cost += w_batt * ca.sumsqr(v[:, k])
-        cost += w_z * ca.sumsqr(p[2, k] - z_ref) # Mantieni la quota!
-
-    # 3. Penalità sulle Slack Variables (Funge da Barrier Function)
-    for k in range(1, N + 1):
-        for j in range(k_obs):
-            cost += w_slack * ca.sumsqr(eps_obs[j, k])
-
-    opti.minimize(cost)
-
-    # --- DYNAMICS CONSTRAINTS ---
-    opti.subject_to(p[:, 0] == p_init)
-    opti.subject_to(v[:, 0] == v_init)
-
-    for k in range(N):
-        opti.subject_to(p[:, k+1] == p[:, k] + v[:, k] * dt + 0.5 * a[:, k] * dt**2)
-        opti.subject_to(v[:, k+1] == v[:, k] + a[:, k] * dt)
-
-    # --- PHYSICAL BOUNDS ---
-    opti.subject_to(opti.bounded(-max_acc, a, max_acc))
-    opti.subject_to(opti.bounded(-max_vel, v, max_vel))
-    
-    for k in range(1, N+1):
-        for j in range(k_obs):
-            opti.subject_to(eps_obs[j, k] >= 0) # Le slack non possono essere negative
-
-    # --- LINEARIZED OBSTACLE AVOIDANCE ---
-    for k in range(N+1):
-        for j in range(k_obs):
-            col_idx = k * k_obs + j
-            dp_bar = p_ego_prev[:, k] - p_obs_closest[:, col_idx]
-            dist_bar_sqr = ca.sumsqr(dp_bar)
-            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
-            
-            # Qui la slack (eps_obs) funge da ammortizzatore / soft barrier
-            opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= safe_rad**2)
-    
-    # --- NEIGHBOR AVOIDANCE ---
-    for j in range(num_neighbors):
-        for k in range(N+1):
-            col_idx = j * (N+1) + k
-            dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
-            dist_bar_sqr = ca.sumsqr(dp_bar)
-            linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
-            opti.subject_to(dist_bar_sqr + linear_term >= safe_rad**2)
-
-    opti.solver("osqp", {"expand": True})
-
-    return {
-        "opti": opti, "p": p, "a": a, "p_init": p_init, 
-        "v_init": v_init, "B_init": B_init, "p_wp": p_wp, 
-        "flag": flag, "p_ego_prev": p_ego_prev, 
-        "p_obs_closest": p_obs_closest, "p_neighbors": p_neighbors,
-        "k_search": num_regions, "k_obs": k_obs
-    }
-
 def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False): 
     """
     Simplified MPC setup for debugging a single drone.
@@ -178,7 +65,7 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
 
     N = mpc_cfg["prediction_horizon"]
     dt = mpc_cfg["timestep"]
-    num_regions = mpc_cfg["k_wp_search"]
+    num_wp = mpc_cfg["k_wp_search"]
     k_obs = mpc_cfg["k_obs_search"]
 
     x_min, x_max = bounds_cfg["x_bounds"]
@@ -206,35 +93,36 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     p_obs_closest = opti.parameter(3, (N+1) * k_obs) 
     r_obs_closest = opti.parameter((N+1) * k_obs)
     p_neighbors = opti.parameter(3, (N+1) * num_neighbors)
-    p_wp = opti.parameter(3, num_regions) 
-    flag = opti.parameter(num_regions)
+    p_wp = opti.parameter(3, num_wp) 
+    flag = opti.parameter(num_wp)
     p_ego_prev = opti.parameter(3, N+1)
     a_ego_prev = opti.parameter(3)
 
     w_seen = opti.parameter(1)
+    target_focus = opti.parameter(num_wp)
 
     # --- COST FUNCTION ---
     cost = 0
     cost_components = {"waypoints": 0, "effort": 0, "battery": 0, "z_ref": 0, "slack": 0, "barrier": 0}
-    #wp_priorities = np.linspace(0.1, 1, N+1)
+    #wp_priorities = np.linspace(1,5, N+1)**2
     wp_priorities = np.ones(N+1)
 
     # 1. Waypoints
-    for i in range(num_regions):
+    for i in range(num_wp):
         # i = 0 is the closest unseen waypoint. We give it 100% focus.
         # Future waypoints in the array get 0% focus so they don't hold back the drone
-        target_focus = 1.0 if i == 0 else 0.0
+        # target_focus = 1.0 if i == 0 else 0.0
         wp_term = 0 
         for k in range(1, N + 1): 
             # Assegna il peso specifico in base all'ordine di vicinanza
             weight = w_seen * wp_priorities[k] if i < len(wp_priorities) else w_seen * 0.01
-            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus
+            wp_term = (1 - flag[i]) * ca.sumsqr(p[:, k] - p_wp[:, i]) * weight * target_focus[i]
             # Aggiungilo al tracker e al costo totale
             cost_components["waypoints"] += wp_term
             cost += wp_term
     '''
     UNCOMMENT THIS TO USE TERMINAL COST INSTEAD OF RUNNING + PENALTY TO GET TO THE WAYPOINT INCREASING IN THE HORIZON 
-    for i in range(num_regions):
+    for i in range(num_wp):
     
         # FIX: The Hierarchy. 
         # i = 0 is the closest unseen waypoint. We give it 100% focus.
@@ -278,8 +166,6 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
     if enable_obstacles:
         slack_term = 0
         step_barrier = 0
-
-        dist_influence = safe_rad + 1.5
         
         for k in range(1, N+1):
             for j in range(k_obs):
@@ -292,22 +178,26 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 # --- DYNAMIC RADII MATH ---
                 # Extract the specific radius for this obstacle at this timestep
                 current_obs_radius = r_obs_closest[col_idx]
-                # Combine the drone's physical buffer with the obstacle's actual size
+                
+                # The "Brick Wall" distance
                 total_safe_dist = safe_rad + current_obs_radius
+                
+                # The "Warning Track" distance (e.g., 1 meter out from the brick wall)
+                # You can change the 1.0 to a variable like warn_margin if you put it in JSON
+                dist_influence = total_safe_dist + 1.0 
                 
                 # Vector from obstacle center to drone's PREVIOUS predicted position
                 dp_bar = p_ego_prev[:2, k] - p_obs_closest[:2, col_idx]
                 dist_bar_sqr = ca.sumsqr(dp_bar)
 
-                # Quadratic Barrier Function
-                barrier_val = w_barrier * ca.fmax(0, dist_influence*2 - dist_bar_sqr)*2
+                # Quadratic Barrier Function (FIXED: **2 instead of *2)
+                barrier_val = w_barrier * ca.fmax(0, dist_influence**2 - dist_bar_sqr)**2
                 step_barrier += barrier_val
                 
                 # First-order Taylor Expansion (The Separating Hyperplane)
                 linear_term = 2 * ca.dot(dp_bar, (p[:2, k] - p_ego_prev[:2, k]))
             
                 # The Convex Constraint
-                # Since LHS is based on squared distance, RHS must be (total_safe_dist)^2
                 opti.subject_to(dist_bar_sqr + linear_term + eps_obs[j, k] >= total_safe_dist**2)
                 
         # Add to total cost
@@ -406,8 +296,9 @@ def setup_test_MPC_QP(num_neighbors=0, enable_obstacles=False):
         "flag": flag, "p_ego_prev": p_ego_prev, 
         "a_ego_prev": a_ego_prev, 
         "p_obs_closest": p_obs_closest,"r_obs_closest": r_obs_closest, "p_neighbors": p_neighbors,
-        "k_search": num_regions, "k_obs": k_obs, 
-        "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh, "w_seen": w_seen
+        "k_search": num_wp, "k_obs": k_obs, 
+        "cost_components": cost_components, "eps_obs": eps_obs, "eps_neigh": eps_neigh, 
+        "w_seen": w_seen, "target_focus": target_focus
     }
 
 def setup_MPC_NLP(num_neighbors): 
@@ -809,7 +700,7 @@ def setup_test_MPC(num_neighbors=0, enable_obstacles=False):
     }
 
 def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,  
-                      last_traj, neighbor_trajs, obs_tree, obstacles, current_w_seen):
+                      last_traj, neighbor_trajs, obs_tree, obstacles, current_w_seen, current_target_focus):
     """
     Executes one step of the MPC.
     waypoint_coords: [M x 3] numpy array [x, y, seen_flag]
@@ -902,6 +793,7 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
     opti.set_value(mpc_vars["a_ego_prev"], current_state["a"])
 
     opti.set_value(mpc_vars["w_seen"], current_w_seen)
+    opti.set_value(mpc_vars["target_focus"], current_target_focus)
         
     flattened_neighbors = neighbor_trajs.reshape((3, -1), order='F')
     
