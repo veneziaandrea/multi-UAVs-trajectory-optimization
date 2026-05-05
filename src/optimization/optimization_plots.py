@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import numpy as np
 from matplotlib.patches import Circle
+import numpy as np
 
 def plot_results(drones, obstacles):
     fig = plt.figure(figsize=(12, 9))
@@ -262,8 +263,6 @@ def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
     plt.tight_layout()
     plt.show()
 
-import numpy as np
-
 def calculate_trajectory_energy(history_v, history_a, dt, mass=1.0):
     """
     Estimates the power (Watts) and total energy (Joules) of a drone's flight.
@@ -324,7 +323,9 @@ def plot_energy_consumption(drones, dt, mass=1.0):
     
     drone_ids = []
     total_energies = []
-    colors = plt.cm.tab10(np.linspace(0, 1, len(drones))) # Distinct colors for each drone
+    # Safe, universal way to pull the colormap
+    cmap = plt.get_cmap('tab10')
+    colors = cmap(np.linspace(0, 1, len(drones))) # Distinct colors for each drone
     
     for i, drone in enumerate(drones):
         # Safety check
@@ -378,3 +379,148 @@ def plot_energy_consumption(drones, dt, mass=1.0):
     plt.show()
 
     return mean_energy
+
+def evaluate_trajectory_performance(drone, dt):
+    """
+    Analyzes the flight logs to quantify the Elastic Band effect and Coverage Trade-off.
+    """
+    p_arr = np.array(drone.history_p)
+    v_arr = np.array(drone.history_v)
+    a_arr = np.array(drone.history_a)
+    
+    # Exclude the "home" waypoint if it was added dynamically at the end
+    mission_wps = drone.waypoints[:-1] if drone.returning_home else drone.waypoints
+    
+    cornering_speeds = []
+    miss_distances = []
+    
+    # 1. EVALUATE WAYPOINTS (Cornering Speed & Miss Distance)
+    for i in range(mission_wps.shape[0]):
+        target_wp = mission_wps[i, :3]
+        
+        # Calculate distance from drone to this waypoint at every timestep
+        distances = np.linalg.norm(p_arr - target_wp, axis=1)
+        
+        # Find the timestep where the drone was closest to the waypoint
+        idx_closest = np.argmin(distances)
+        
+        # Record the Miss Distance (Coverage Trade-off)
+        min_dist = distances[idx_closest]
+        miss_distances.append(min_dist)
+        
+        # Record the Cornering Speed (Kinetic Energy Retention)
+        speed_at_wp = np.linalg.norm(v_arr[idx_closest])
+        cornering_speeds.append(speed_at_wp)
+
+    # 2. EVALUATE SMOOTHNESS (Cumulative Jerk)
+    # Jerk is the derivative of acceleration: (a[k] - a[k-1]) / dt
+    jerk_vectors = np.diff(a_arr, axis=0) / dt
+    jerk_magnitudes = np.linalg.norm(jerk_vectors, axis=1)
+    
+    # Cumulative sum of squared jerk
+    total_jerk_effort = np.sum(jerk_magnitudes**2) * dt
+    
+    # 3. EVALUATE MISSION TIME
+    total_flight_time = len(p_arr) * dt
+    
+    # --- PRINT REPORT ---
+    print(f"\n=== FLIGHT DYNAMICS REPORT (Drone {drone.id}) ===")
+    print(f"Total Flight Time:      {total_flight_time:.2f} seconds")
+    print(f"Cumulative Jerk Effort: {total_jerk_effort:.2f} m^2/s^5")
+    print("-" * 40)
+    print("Waypoint Analysis:")
+    for i in range(len(cornering_speeds)):
+        print(f"  WP {i+1}: Missed Center by {miss_distances[i]:.2f}m | Cornering Speed: {cornering_speeds[i]:.2f} m/s")
+        
+    avg_miss = np.mean(miss_distances)
+    avg_speed = np.mean(cornering_speeds)
+    print("-" * 40)
+    print(f"AVERAGE MISS DISTANCE:  {avg_miss:.2f} meters")
+    print(f"AVERAGE CORNERING SPD:  {avg_speed:.2f} m/s")
+    
+    return {
+        "time": total_flight_time,
+        "jerk": total_jerk_effort,
+        "avg_miss_distance": avg_miss,
+        "avg_cornering_speed": avg_speed
+    }
+
+def plot_algorithm_comparison(drone_ids, data_a, name_a, globals_a, data_b, name_b, globals_b):
+    """
+    Generates a 3-panel grouped bar chart comparing two trajectory algorithms.
+    
+    Expected format for data_a and data_b:
+    {
+        "speed": [float, ...], # Cornering speeds
+        "jerk":  [float, ...], # Cumulative jerk
+        "miss":  [float, ...]  # Miss distances
+    }
+    Expected format for globals_a and globals_b:
+    {"time": float, "coverage": float}
+    """
+    x = np.arange(len(drone_ids))
+    width = 0.35
+    
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
+    
+    # Global Title
+    title_str = (f"Trajectory Tracking Performance: {name_a} vs {name_b}\n"
+                 f"Total Time: {name_a} ({globals_a['time']:.2f}s) vs {name_b} ({globals_b['time']:.2f}s) | "
+                 f"Coverage: {name_a} ({globals_a['coverage']:.2f}%) vs {name_b} ({globals_b['coverage']:.2f}%)")
+    fig.suptitle(title_str, fontsize=14, fontweight='bold', y=0.95)
+    
+    # Setup Colors
+    color_a, color_b = '#2ca02c', '#1f77b4' # Green vs Blue
+    
+    # --- Subplot 1: Cornering Speed ---
+    rects1_a = ax1.bar(x - width/2, data_a['speed'], width, label=name_a, color=color_a, edgecolor='black')
+    rects1_b = ax1.bar(x + width/2, data_b['speed'], width, label=name_b, color=color_b, edgecolor='black')
+    ax1.set_ylabel('Speed (m/s)')
+    ax1.set_title('Average Cornering Speed (Kinetic Energy Retention)')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(drone_ids)
+    ax1.legend()
+    ax1.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # --- Subplot 2: Cumulative Jerk ---
+    rects2_a = ax2.bar(x - width/2, data_a['jerk'], width, color=color_a, edgecolor='black')
+    rects2_b = ax2.bar(x + width/2, data_b['jerk'], width, color=color_b, edgecolor='black')
+    ax2.set_ylabel('Jerk ($m^2/s^5$)')
+    ax2.set_title('Cumulative Jerk Effort (Actuator Wear)')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(drone_ids)
+    ax2.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # --- Subplot 3: Miss Distance ---
+    rects3_a = ax3.bar(x - width/2, data_a['miss'], width, color=color_a, edgecolor='black')
+    rects3_b = ax3.bar(x + width/2, data_b['miss'], width, color=color_b, edgecolor='black')
+    ax3.set_ylabel('Distance (m)')
+    ax3.set_title('Average Miss Distance (Coverage Trade-off)')
+    ax3.set_xticks(x)
+    ax3.set_xticklabels(drone_ids)
+    
+    # Dynamic Y-Limit to zoom in on the exact data range
+    min_miss = min(min(data_a['miss']), min(data_b['miss']))
+    max_miss = max(max(data_a['miss']), max(data_b['miss']))
+    padding = (max_miss - min_miss) * 0.5 if max_miss != min_miss else 0.5
+    ax3.set_ylim(max(0, min_miss - padding), max_miss + padding)
+    
+    ax3.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # --- Utility: Add Data Labels ---
+    def autolabel(rects, ax, format_str='{:.2f}'):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(format_str.format(height),
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3), 
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=9)
+
+    # Apply labels
+    autolabel(rects1_a, ax1); autolabel(rects1_b, ax1)
+    autolabel(rects2_a, ax2, '{:.0f}'); autolabel(rects2_b, ax2, '{:.0f}')
+    autolabel(rects3_a, ax3); autolabel(rects3_b, ax3)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    plt.show()

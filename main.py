@@ -23,7 +23,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance
 
 def build_demo(config): 
     # Load environment configuration
@@ -225,10 +225,6 @@ if __name__ == "__main__":
         # In main.py, before the loop:
         switch_distance = dist_threshold + 0.25
         
-        # The threshold to mark a waypoint as complete MUST be >= the handoff distance
-        # Add a tiny buffer (0.1m) so it registers the moment it enters the handoff zone
-        # dist_threshold = switch_distance + 0.2
-
         for i, drone in enumerate(drones):
             
             # Check if regular mission is done
@@ -262,8 +258,8 @@ if __name__ == "__main__":
                 
                 # If we are close (inside the 1.5m bubble), shift focus to the NEXT waypoint
                 else:
-                    # current_focus_vector[0] = 0.8 
-                    current_focus_vector[1] = 1.0  #  pull toward the next waypoint
+                    current_focus_vector[0] = 1.0
+                    current_focus_vector[1] = 0.0  #  pull toward the next waypoint
         
             # Check if drone has arrived home
             if drone.returning_home and not drone.is_parked:
@@ -424,3 +420,9 @@ print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
 
 # 2. Plotta la mappa Seen/Unseen
 plot_coverage_map(coverage_grid, map_limits, res, map3d.obstacles, drones)
+
+for drone in drones:
+    [total_flight_time,
+    total_jerk_effort,
+    avg_miss,
+    avg_cornering_speed] =  evaluate_trajectory_performance(drone, dt)
