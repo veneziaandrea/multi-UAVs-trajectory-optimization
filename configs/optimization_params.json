@@ -21,6 +21,6 @@
         "timestep": 0.05,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 3000
+        "max_iter": 2000
     }
 }

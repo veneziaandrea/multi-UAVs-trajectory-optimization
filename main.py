@@ -205,13 +205,19 @@ if __name__ == "__main__":
         )
         
         # Extract Normal Metrics
-        normal_metrics = {"speed": [], "jerk": [], "miss": []}
+        normal_metrics = {"speed": [], "jerk": [], "miss": [], "state": []}
         drone_labels = []
         for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
             normal_metrics["speed"].append(report["avg_cornering_speed"])
             normal_metrics["jerk"].append(report["jerk"])
             normal_metrics["miss"].append(report["avg_miss_distance"])
+            # ---> NEW: Evaluate if the drone finished or got stuck <---
+            if drone.is_parked:
+                status = "Success"
+            else:
+                status = "Stuck"
+            normal_metrics["state"].append(status)
 
             drone_labels.append(f"Drone {drone.id}")
             
@@ -237,13 +243,18 @@ if __name__ == "__main__":
         )
         
         # Extract Early Metrics
-        early_metrics = {"speed": [], "jerk": [], "miss": []}
+        early_metrics = {"speed": [], "jerk": [], "miss": [], "state": []}
         drone_labels = []
         for drone in drones_early:
             report = evaluate_trajectory_performance(drone, dt)
             early_metrics["speed"].append(report["avg_cornering_speed"])
             early_metrics["jerk"].append(report["jerk"])
             early_metrics["miss"].append(report["avg_miss_distance"])
+            if drone.is_parked:
+                status = "Success"
+            else:
+                status = "Stuck"
+            early_metrics["state"].append(status)
             drone_labels.append(f"Drone {drone.id}")
             
         early_time = len(drones_early[0].history_p) * dt
@@ -270,6 +281,14 @@ if __name__ == "__main__":
         
     # Load the database
     df = pd.read_csv(csv_filepath)
+
+    tot_rows = df.count(axis=1)
+
+    df = df[df["Final_State"] == "Success"]
+
+    success_rows = df.count(axis=1)
+
+    print(f"Early Switching Success Rate: {success_rows}/{tot_rows}")
 
     # Group the data by Algorithm, and calculate the MEAN across all maps and drones
     summary = df.groupby("Algorithm").mean(numeric_only=True)

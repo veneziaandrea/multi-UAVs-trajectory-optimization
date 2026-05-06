@@ -555,12 +555,13 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
         for i in range(len(drone_ids)):
             writer.writerow([
                 map_seed,
-                overlap_factor,  # <--- NEW: Inserted here
+                overlap_factor,  
                 mode,
                 drone_ids[i],
                 round(metrics["speed"][i], 4),
                 round(metrics["jerk"][i], 4),
                 round(metrics["miss"][i], 4),
                 round(global_time, 2),
-                round(global_cov, 2)
+                round(global_cov, 2),
+                metrics["state"]
             ])
