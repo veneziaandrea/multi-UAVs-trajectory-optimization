@@ -262,7 +262,7 @@ if __name__ == "__main__":
         # Extract Early Metrics
         early_metrics = {"speed": [], "jerk": [], "miss": [], "state": [], "time": []}
         drone_labels = []
-        for drone in drones_normal:
+        for drone in drones_early:
             report = evaluate_trajectory_performance(drone, dt)
             early_metrics["speed"].append(report["avg_cornering_speed"])
             early_metrics["jerk"].append(report["jerk"])

@@ -540,7 +540,7 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
             writer.writerow([
                 "Map_Seed", "Overlap_Factor", "Algorithm", "Drone_ID", 
                 "Final_State", "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", 
-                "Flight_Time_s",  # <--- Renamed Header
+                "Flight_Time_s",  
                 "Coverage_pct"
             ])
             
@@ -554,6 +554,6 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 round(metrics["speed"][i], 4),
                 round(metrics["jerk"][i], 4),
                 round(metrics["miss"][i], 4),
-                round(metrics["time"][i], 2),  # <--- Pull individual time
+                round(metrics["time"][i], 2), 
                 round(global_cov, 2)
             ])
