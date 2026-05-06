@@ -5,6 +5,7 @@ import math
 from scipy.spatial import KDTree
 from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # Set the root directory and add the source directory to the Python path
 ROOT = Path(__file__).resolve().parent
@@ -266,6 +267,18 @@ if __name__ == "__main__":
     '''
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
                                 drone_labels, early_metrics, early_time, early_cov)
+        
+    # Load the database
+    df = pd.read_csv(csv_filepath)
+
+    # Group the data by Algorithm, and calculate the MEAN across all maps and drones
+    summary = df.groupby("Algorithm").mean(numeric_only=True)
+
+    # Drop the Map_Seed column from the summary (since averaging the seed ID is meaningless)
+    summary = summary.drop(columns=["Map_Seed"])
+
+    print("\n=== AVERAGE PERFORMANCE ACROSS ALL MAPS ===")
+    print(summary.to_string())
         
         # (Optional: Show the 3D map or animation for the Early Switching run)
         # plot_results(drones_early, map3d.obstacles)
