@@ -20,10 +20,31 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP 
+from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP, run_swarm_simulation
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison
+
+def spawn_swarm():
+    """Generates a brand new set of drones"""
+
+    fresh_drones = []
+    for id_d in drone_ids:
+        # Use your existing Voronoi and TSP logic
+        current_cell = vor.Voronoi_Cells[id_d]
+        partition_shape = Polygon(current_cell.polygon)
+        waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
+        waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
+
+        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles=True) 
+        new_drone = Drone(id_d, drone_positions[id_d], waypoints_ordered, vars_, N)
+        
+        new_drone.returning_home = False
+        new_drone.is_parked = False
+        new_drone.home_pos = drone_positions[id_d]
+        fresh_drones.append(new_drone)
+        
+    return fresh_drones
 
 def build_demo(config): 
     # Load environment configuration
@@ -108,6 +129,8 @@ if __name__ == "__main__":
     config_path = ROOT / "configs" / "demo_parameters.json"
     config = load_config(config_path)
 
+    map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
+
     # Set random seed for reproducibility
     seed_everything(config["seed"])
 
@@ -148,8 +171,6 @@ if __name__ == "__main__":
     max_iter = mpc_cfg["max_iter"]
 
     # --- INITIALIZATION ---
-    # Assume 'drones' is a list of objects containing 
-    # the state, mpc_vars, and trajectory for each drone ID.
     drones = []
     drone_ids = [0] * len(drone_positions)
     for i in range(len(drone_positions)):
@@ -163,266 +184,82 @@ if __name__ == "__main__":
     if waypoints.shape[1] == 2:
         seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
         waypoints = np.hstack((waypoints, seen_column)) # Attach it
-    
-    # --- Assignment Phase ---
-    for id_d in drone_ids:
-        current_cell = vor.Voronoi_Cells[id_d]
-        partition_shape = Polygon(current_cell.polygon)
-        
-        waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
-        # Order the waypoints
-        waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
 
-        # Initialize Drone
-        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles=True) 
-        new_drone = Drone(id_d, drone_positions[id_d], waypoints_ordered, vars_, N)
-        drones.append(new_drone)
-        new_drone.returning_home = False
-        new_drone.is_parked = False
-        new_drone.home_pos = drone_positions[id_d]
-        
     # --- MAIN MPC LOOP ---
-    num_iter = 0
     dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-    dJ_thresh = 1e-6
-    prev_total_cost = 1e6
     ego_accel_prev = 0
     t_solve_avg = 0
-
-    # Initialize the history tracker for plot 
-    cost_history = {
-        "total": [],
-        "waypoints": [],
-        "effort": [],
-        "battery": [],
-        "z_ref": [],
-        "barrier": [] 
-    }
-
-    total_solver_time = 0.0
-    total_solver_calls = 0
-
-   # --- MAIN MPC LOOP ---
-    while num_iter <= max_iter:
-        total_loop_cost = 0 # Track sum for the whole fleet
-        
-        # Check if ALL drones have finished their tasks (including the RTH waypoint)
-        all_done = all(d.is_parked for d in drones)
-
-        if all_done:
-            print(f"\nMission accomplished in {num_iter} steps!")
-            
-            average_time = total_solver_time / total_solver_calls
-            print(f"Avg Solve Time: {average_time:.5f} seconds")
-            
-            # --- Show the Power Analysis ---
-            print("\nGenerating Energy Consumption Report...")
-            mean_energy = plot_energy_consumption(drones, dt, mass=1.0) # Adjust mass if your drones are heavier
-            print(f"Mean energy [J]: {mean_energy}")
-            
-            break
-
-        # In main.py, before the loop:
-        switch_distance = dist_threshold + 0.25
-        
-        for i, drone in enumerate(drones):
-            
-            # Check if regular mission is done
-            unseen_mask = drone.waypoints[:, 2] == 0
-            if not np.any(unseen_mask) and not drone.returning_home:
-                print(f"Drone {drone.id} finished mission! Returning home.")
-                
-                # Append home position to the waypoints array [x, y, 0 (unseen flag)]
-                home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
-                drone.waypoints = np.vstack([drone.waypoints, home_wp])
-                drone.returning_home = True
-
-            # --- IDENTIFY TARGETS ---
-            # Filter the waypoints to find only the ones that haven't been seen yet
-            unseen_wps = drone.waypoints[drone.waypoints[:, 2] == 0]
-            
-            # Default focus vector (Zeros)
-            current_focus_vector = np.zeros(mpc_cfg["k_wp_search"])
-            
-            if len(unseen_wps) > 0:
-                # The current target is always the first unseen waypoint
-                current_target = unseen_wps[0, :3]
-                
-                # --- CALCULATE DISTANCE IN PYTHON ---
-                # Compare drone's current position to the current target
-                dist_to_current = np.linalg.norm(drone.state["p"][:2] - current_target[:2])
-                
-                # If we are far away, or if this is the very last waypoint, focus 100% on the current one
-                if dist_to_current > switch_distance or len(unseen_wps) < 2:
-                    current_focus_vector[0] = 1.0 
-                
-                # If we are close (inside the 1.5m bubble), shift focus to the NEXT waypoint
-                else:
-                    current_focus_vector[0] = 1.0
-                    current_focus_vector[1] = 0.0  #  pull toward the next waypoint
-        
-            # Check if drone has arrived home
-            if drone.returning_home and not drone.is_parked:
-                dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
-                
-                if dist_to_home < dist_threshold:
-                    print(f"Drone {drone.id} has parked safely!")
-                    drone.is_parked = True 
-
-            # Bypass drones that finished their task
-            if drone.is_parked:
-                drone.state["v"] = np.zeros(3)
-                drone.state["a"] = np.zeros(3)
-                
-                N = drone.mpc_vars["p"].shape[1] - 1
-                stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
-                drone.last_traj = stationary_traj
-                
-                drone.history_p.append(drone.state["p"].copy())
-                drone.history_a.append(np.zeros(3))
-                drone.history_v.append(np.zeros(3))
-
-                if hasattr(drone, 'history_predictions'):
-                    drone.history_predictions.append(stationary_traj)
-                
-                continue # Skip the MPC block below and move to the next drone
-            
-            # --- RUN MPC FOR ACTIVE DRONES ---
-            
-            # Collect trajectories from other drones
-            neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
+    early_swtiching_flag = False
     
-            if len(neighbor_trajs) > 0:
-                neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
-            else:
-                neighbor_trajs_array = np.empty((3, N + 1, 0))
-
-            # Decide the weight based on the drone's status
-            if drone.returning_home:
-                current_w_seen = config["cost"]["w_seen_rth"]
-            else:
-                current_w_seen = config["cost"]["w_seen"]
-
-            # Run MPC
-            accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
-                drone.mpc_vars, drone.state, 
-                drone.waypoints, 
-                drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, current_w_seen, current_focus_vector
-            )
-
-            total_solver_time += t_solve_mpc
-            total_solver_calls += 1
-
-            # Record the costs for this iteration if the solver didn't fail
-            if current_cost_value != np.inf: 
-                cost_history["total"].append(current_cost_value)
-                for key, val in cost_breakdown.items():
-                    if key not in cost_history:
-                        cost_history[key] = []
-                    cost_history[key].append(val)
-
-            total_loop_cost += current_cost_value
-
-            # Update physics and internal logs
-            drone.drone_model(accel, dt)
-            drone.check_waypoints(dist_threshold)
-            drone.log_telemetry(new_traj)
-            drone.last_traj = new_traj
-            drone.history_a.append(accel)
-            drone.history_v.append(drone.state["v"].copy())
-
-            # Save the applied acceleration so the next loop can calculate jerk
-            drone.state["a"] = accel
-
-            if num_iter % PRINT_INTERVAL == 0:
-
-                print(f"\n--- Step {num_iter} | Drone {drone.id} ---")
-                print(f"Total Cost:  {current_cost_value:.2f}")
-                print(f"  Waypoints: {cost_breakdown['waypoints']:.2f}")
-                print(f"  Effort:    {cost_breakdown['effort']:.2f}")
-                print(f"  Battery:   {cost_breakdown['battery']:.2f}")
-                print(f"  Slack:     {cost_breakdown['slack']:.2f}")
-                print(f"  Barrier:     {cost_breakdown['barrier']:.2f}") 
-                print(f"  Z Ref: {cost_breakdown['z_ref']:.2f}")
+    drones_normal = spawn_swarm()
+    drones_normal, cost_hist_normal = run_swarm_simulation(
+        drones_normal, dt, max_iter, config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
+    )
+    
+    # Extract Normal Metrics
+    normal_metrics = {"speed": [], "jerk": [], "miss": []}
+    for drone in drones_normal:
+        report = evaluate_trajectory_performance(drone, dt)
+        normal_metrics["speed"].append(report["avg_cornering_speed"])
+        normal_metrics["jerk"].append(report["jerk"])
+        normal_metrics["miss"].append(report["avg_miss_distance"])
         
-        if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
-            print("Converged!")
-            break
-            
-        prev_total_cost = total_loop_cost
-        num_iter += 1
+    # Calculate global time/coverage for Normal run
+    res = 0.2 #map resolution
+    normal_time = len(drones_normal[0].history_p) * dt
+    normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
 
-# --- END MPC LOOP ---
+    # ==========================================
+    # RUN 2: EARLY SWITCHING
+    # ==========================================
+    print("\n" + "="*50)
+    print(" STARTING RUN 2: EARLY SWITCHING")
+    print("="*50)
 
-print("optimization completed")
+    early_swtiching_flag = True
+    
+    drones_early = spawn_swarm() 
+    drones_early, cost_hist_early = run_swarm_simulation(
+        drones_early, dt, max_iter, config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
+    )
+    
+    # Extract Early Metrics
+    early_metrics = {"speed": [], "jerk": [], "miss": []}
+    drone_labels = []
+    for drone in drones_early:
+        report = evaluate_trajectory_performance(drone, dt)
+        early_metrics["speed"].append(report["avg_cornering_speed"])
+        early_metrics["jerk"].append(report["jerk"])
+        early_metrics["miss"].append(report["avg_miss_distance"])
+        drone_labels.append(f"Drone {drone.id}")
+        
+    early_time = len(drones_early[0].history_p) * dt
+    early_cov, _ = calculate_final_coverage(drones_early, map_limits, L, W, res)
 
-# --- OPTIMIZATION RECAP ---
-print("\n" + "="*40)
-print("       OPTIMIZATION COST RECAP")
-print("="*40)
-print(f"{'Component':<15} | {'Mean':<10} | {'Max':<10}")
-print("-" * 40)
+    # ==========================================
+    # PHASE 3: AUTOMATED COMPARISON PLOT
+    # ==========================================
+    print("\nGenerating Final Performance Comparison...")
+    
+    plot_algorithm_comparison(
+        drone_ids=drone_labels,
+        data_a=early_metrics,  
+        name_a="Early Switching",  
+        globals_a={"time": early_time, "coverage": early_cov},
+        
+        data_b=normal_metrics, 
+        name_b="Normal Switching", 
+        globals_b={"time": normal_time, "coverage": normal_cov}
+    )
+    
+    # (Optional: Show the 3D map or animation for the Early Switching run)
+    plot_results(drones_early, map3d.obstacles)
 
-# Calculate and print stats
-for key, values in cost_history.items():
-    if len(values) > 0:
-        mean_val = np.mean(values)
-        max_val = np.max(values)
-        print(f"{key.capitalize():<15} | {mean_val:<10.2f} | {max_val:<10.2f}")
+        # Plot the apllied inputs and velocities
+    plot_kinematics(drones_early, dt)
 
-# Filter out empty entries to determine the number of subplots needed
-valid_items = [(key, values) for key, values in cost_history.items() if len(values) > 0]
-num_plots = len(valid_items)
+    animate_simulation(drones_early, map3d.obstacles, map_limits)
 
-# Create subplots dynamically, sharing the X-axis to keep it clean
-# We scale the figure height (3 * num_plots) so the plots don't look squished
-fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=True)
-
-# Ensure 'axes' is always iterable even if there is only 1 valid cost component
-if num_plots == 1:
-    axes = [axes]
-
-# Plot each valid component on its own subplot (ax)
-for ax, (key, values) in zip(axes, valid_items):
-    ax.plot(values, label=f"{key.capitalize()} (Max: {np.max(values):.1f})")
-    ax.set_title(f"{key.capitalize()} Cost", fontsize=12)
-    ax.set_ylabel("Cost (Log)", fontsize=10)
-    ax.set_yscale("log") # Log scale
-    ax.grid(True, which="both", ls="--", alpha=0.5)
-    ax.legend(loc="upper right")
-
-# Set global labels and layout
-plt.xlabel("Iteration Step", fontsize=12)
-plt.suptitle("MPC Cost Components Over Time", fontsize=14, y=1.02) # y pushes the title slightly up
-plt.tight_layout()
-plt.show()
-
-# Open a bird eye view to see the 2D flight paths
-plot_results(drones, map3d.obstacles)
-
-# Plot the apllied inputs and velocities
-plot_kinematics(drones, dt)
-
-# 2D Animation
-config_path = ROOT / "configs" / "demo_parameters.json"
-config = load_config(config_path)
-map_cfg = config["map"]
-map_limits = [ map_cfg["x_bounds"],
-            map_cfg["y_bounds"],
-            map_cfg["z_bounds"]
-            ]
-animate_simulation(drones, map3d.obstacles, map_limits)
-
-# 1. Calcola e ottieni la griglia
-res = 0.2 # Resolution
-final_coverage_pct, coverage_grid = calculate_final_coverage(drones, map_limits, L, W, res)
-print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
-
-# 2. Plotta la mappa Seen/Unseen
-plot_coverage_map(coverage_grid, map_limits, res, map3d.obstacles, drones)
-
-for drone in drones:
-    [total_flight_time,
-    total_jerk_effort,
-    avg_miss,
-    avg_cornering_speed] =  evaluate_trajectory_performance(drone, dt)
+    res = 0.2 # Resolution
+    final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
+    print(f"Final Map Coverage: {final_coverage_pct:.2f}%")

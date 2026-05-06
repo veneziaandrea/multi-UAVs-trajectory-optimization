@@ -840,4 +840,128 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
         braking_accel = -current_state["v"] 
         fallback_components = {name: 0.0 for name in mpc_vars["cost_components"].keys()}
         solve_time = 0 # fallback shouldn't contaminate the real value
-        return braking_accel, last_traj, cost_value, fallback_components, solve_time        
+        return braking_accel, last_traj, cost_value, fallback_components, solve_time   
+
+def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist_threshold, early_switch_flag, PRINT_INTERVAL=10):
+    """
+    Executes the MPC loop for the entire swarm until all drones are parked or max_iter is reached.
+    """
+    num_iter = 0
+    switch_distance = dist_threshold + 0.25
+    dJ_thresh = 1e-6
+    prev_total_cost = 1e6
+    
+    total_solver_time = 0.0
+    total_solver_calls = 0
+
+    # Initialize the history tracker 
+    cost_history = {
+        "total": [], "waypoints": [], "effort": [], 
+        "battery": [], "z_ref": [], "barrier": [], "slack": []
+    }
+
+    print("\nStarting Swarm MPC Simulation...")
+    
+    while num_iter <= max_iter:
+        total_loop_cost = 0 
+        
+        # Check if ALL drones have finished their tasks
+        if all(d.is_parked for d in drones):
+            print(f"\nMission accomplished in {num_iter} steps!")
+            average_time = total_solver_time / total_solver_calls if total_solver_calls > 0 else 0
+            print(f"Avg Solve Time: {average_time:.5f} seconds")
+            break
+
+        for i, drone in enumerate(drones):
+            
+            # --- 1. MISSION STATE CHECK ---
+            unseen_mask = drone.waypoints[:, 2] == 0
+            if not np.any(unseen_mask) and not drone.returning_home:
+                print(f"Drone {drone.id} finished mission! Returning home.")
+                home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
+                drone.waypoints = np.vstack([drone.waypoints, home_wp])
+                drone.returning_home = True
+
+            # --- 2. TARGET IDENTIFICATION (Early Switch Logic) ---
+            unseen_wps = drone.waypoints[drone.waypoints[:, 2] == 0]
+            current_focus_vector = np.zeros(config["mpc"]["k_wp_search"])
+            
+            if len(unseen_wps) > 0:
+                current_target = unseen_wps[0, :3]
+                dist_to_current = np.linalg.norm(drone.state["p"][:2] - current_target[:2])
+                if early_switch_flag == True:
+                    if dist_to_current > switch_distance or len(unseen_wps) < 2:
+                        current_focus_vector[0] = 1.0 
+                    else:
+                        current_focus_vector[1] = 1.0  
+                else: 
+                    current_focus_vector[0] = 1.0
+            
+            # --- 3. PARKING LOGIC ---
+            if drone.returning_home and not drone.is_parked:
+                dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
+                if dist_to_home < dist_threshold:
+                    print(f"Drone {drone.id} has parked safely!")
+                    drone.is_parked = True 
+
+            if drone.is_parked:
+                drone.state["v"] = np.zeros(3)
+                drone.state["a"] = np.zeros(3)
+                
+                N = drone.mpc_vars["p"].shape[1] - 1
+                stationary_traj = np.tile(drone.state["p"], (N+1, 1)).T
+                drone.last_traj = stationary_traj
+                
+                drone.history_p.append(drone.state["p"].copy())
+                drone.history_a.append(np.zeros(3))
+                drone.history_v.append(np.zeros(3))
+                if hasattr(drone, 'history_predictions'):
+                    drone.history_predictions.append(stationary_traj)
+                continue 
+            
+            # --- 4. RUN MPC ---
+            neighbor_trajs = [d.last_traj for d in drones if d.id != drone.id]
+            if len(neighbor_trajs) > 0:
+                neighbor_trajs_array = np.stack(neighbor_trajs, axis=2)
+            else:
+                neighbor_trajs_array = np.empty((3, drone.mpc_vars["p"].shape[1], 0))
+
+            current_w_seen = config["cost"]["w_seen_rth"] if drone.returning_home else config["cost"]["w_seen"]
+
+            accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
+                drone.mpc_vars, drone.state, drone.waypoints, 
+                drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, 
+                current_w_seen, current_focus_vector
+            )
+
+            total_solver_time += t_solve_mpc
+            total_solver_calls += 1
+
+            # --- 5. LOGGING ---
+            if current_cost_value != np.inf: 
+                cost_history["total"].append(current_cost_value)
+                for key, val in cost_breakdown.items():
+                    if key not in cost_history: cost_history[key] = []
+                    cost_history[key].append(val)
+            total_loop_cost += current_cost_value
+
+            drone.drone_model(accel, dt)
+            drone.check_waypoints(dist_threshold)
+            drone.log_telemetry(new_traj)
+            drone.last_traj = new_traj
+            drone.history_a.append(accel)
+            drone.history_v.append(drone.state["v"].copy())
+            drone.state["a"] = accel
+
+            if num_iter % PRINT_INTERVAL == 0:
+                print(f"Step {num_iter} | Drone {drone.id} | Cost: {current_cost_value:.2f}")
+        
+        # Convergence Check
+        if abs(prev_total_cost - total_loop_cost) < dJ_thresh:
+            print("Swarm converged to steady state!")
+            break
+            
+        prev_total_cost = total_loop_cost
+        num_iter += 1
+
+    return drones, cost_history     
