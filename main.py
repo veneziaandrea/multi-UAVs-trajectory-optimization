@@ -205,28 +205,45 @@ if __name__ == "__main__":
         )
         
         # Extract Normal Metrics
-        normal_metrics = {"speed": [], "jerk": [], "miss": [], "state": []}
+        normal_metrics = {"speed": [], "jerk": [], "miss": [], "state": [], "time": []}
         drone_labels = []
         for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
             normal_metrics["speed"].append(report["avg_cornering_speed"])
             normal_metrics["jerk"].append(report["jerk"])
             normal_metrics["miss"].append(report["avg_miss_distance"])
-            # ---> NEW: Evaluate if the drone finished or got stuck <---
+            
+            # --- EXACT TIME & STATE CALCULATION ---
             if drone.is_parked:
                 status = "Success"
+                
+                # Calculate the magnitude of velocity at every timestep
+                v_mag = np.linalg.norm(drone.history_v, axis=1)
+                
+                # Find the very last index where velocity was not zero
+                if np.any(v_mag > 1e-5):
+                    # np.max(np.nonzero) gets the last active index. Add 1 for total steps.
+                    active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1
+                else:
+                    active_steps = 0
+                    
+                drone_time = active_steps * dt
             else:
                 status = "Stuck"
-            normal_metrics["state"].append(status)
+                # If it got stuck, it spent the entire simulation flying/trying
+                drone_time = len(drone.history_p) * dt
 
+            normal_metrics["state"].append(status)
+            normal_metrics["time"].append(drone_time) # Append the exact time
             drone_labels.append(f"Drone {drone.id}")
             
-        # Calculate global time/coverage for Normal run
-        res = 0.2 #map resolution
-        normal_time = len(drones_normal[0].history_p) * dt
+        # Calculate global coverage 
+        res = 0.2
         normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
+        
+        # Save (notice global_time is removed from the arguments)
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Normal", 
-                            drone_labels, normal_metrics, normal_time, normal_cov)
+                            drone_labels, normal_metrics, normal_cov)
 
         # ==========================================
         # RUN 2: EARLY SWITCHING
@@ -243,22 +260,45 @@ if __name__ == "__main__":
         )
         
         # Extract Early Metrics
-        early_metrics = {"speed": [], "jerk": [], "miss": [], "state": []}
+        early_metrics = {"speed": [], "jerk": [], "miss": [], "state": [], "time": []}
         drone_labels = []
-        for drone in drones_early:
+        for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
             early_metrics["speed"].append(report["avg_cornering_speed"])
             early_metrics["jerk"].append(report["jerk"])
             early_metrics["miss"].append(report["avg_miss_distance"])
+            
+            # ---> 2. EXACT TIME & STATE CALCULATION <---
             if drone.is_parked:
                 status = "Success"
+                
+                # Calculate the magnitude of velocity at every timestep
+                v_mag = np.linalg.norm(drone.history_v, axis=1)
+                
+                # Find the very last index where velocity was not zero
+                if np.any(v_mag > 1e-5):
+                    # np.max(np.nonzero) gets the last active index. Add 1 for total steps.
+                    active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1
+                else:
+                    active_steps = 0
+                    
+                drone_time = active_steps * dt
             else:
                 status = "Stuck"
+                # If it got stuck, it spent the entire simulation flying/trying
+                drone_time = len(drone.history_p) * dt
+
             early_metrics["state"].append(status)
+            early_metrics["time"].append(drone_time) # Append the exact time
             drone_labels.append(f"Drone {drone.id}")
             
-        early_time = len(drones_early[0].history_p) * dt
+        # Calculate global coverage 
+        res = 0.2
         early_cov, _ = calculate_final_coverage(drones_early, map_limits, L, W, res)
+        
+        # Save (notice global_time is removed from the arguments)
+        save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
+                            drone_labels, early_metrics, early_cov)
 
         # ==========================================
         # PHASE 3: AUTOMATED COMPARISON PLOT
@@ -276,9 +316,7 @@ if __name__ == "__main__":
             globals_b={"time": normal_time, "coverage": normal_cov}
         )
     '''
-        save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
-                                drone_labels, early_metrics, early_time, early_cov)
-        
+         
     # Load the database
     df = pd.read_csv(csv_filepath)
 

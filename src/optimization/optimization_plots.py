@@ -528,40 +528,32 @@ def plot_algorithm_comparison(drone_ids, data_a, name_a, globals_a, data_b, name
     plt.tight_layout(rect=[0, 0, 1, 0.93])
     plt.show()
 
-def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, metrics, global_time, global_cov):
-    """
-    Appends the flight metrics of a simulation run to a persistent CSV file.
-    """
-
-    # Ensure filepath is a Path object
+def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, metrics, global_cov):
     file_path = Path(filepath)
-    
-    # ---> NEW: Safely create the folder(s) if they don't exist <---
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_exists = file_path.is_file()
     
-    with open(filepath, mode='a', newline='') as file:
+    with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         
-        # Write the header with the new column
         if not file_exists:
             writer.writerow([
                 "Map_Seed", "Overlap_Factor", "Algorithm", "Drone_ID", 
-                "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", 
-                "Total_Time_s", "Coverage_pct"
+                "Final_State", "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", 
+                "Flight_Time_s",  # <--- Renamed Header
+                "Coverage_pct"
             ])
             
-        # Write a row for each drone
         for i in range(len(drone_ids)):
             writer.writerow([
                 map_seed,
-                overlap_factor,  
+                overlap_factor,
                 mode,
                 drone_ids[i],
+                metrics["state"][i],
                 round(metrics["speed"][i], 4),
                 round(metrics["jerk"][i], 4),
                 round(metrics["miss"][i], 4),
-                round(global_time, 2),
-                round(global_cov, 2),
-                metrics["state"]
+                round(metrics["time"][i], 2),  # <--- Pull individual time
+                round(global_cov, 2)
             ])
