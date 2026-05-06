@@ -137,6 +137,7 @@ if __name__ == "__main__":
     for test_seed in seed_list:
         # Set random seed for reproducibility
         # seed_everything(config["seed"])
+        config["seed"] = test_seed
         seed_everything(test_seed)
         # Build the demo environment and get initial drone positions
         L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
@@ -211,7 +212,7 @@ if __name__ == "__main__":
             normal_metrics["jerk"].append(report["jerk"])
             normal_metrics["miss"].append(report["avg_miss_distance"])
 
-        drone_labels.append(f"Drone {drone.id}")
+            drone_labels.append(f"Drone {drone.id}")
             
         # Calculate global time/coverage for Normal run
         res = 0.2 #map resolution
@@ -251,7 +252,7 @@ if __name__ == "__main__":
         # PHASE 3: AUTOMATED COMPARISON PLOT
         # ==========================================
         print("\nGenerating Final Performance Comparison...")
-        
+        '''
         plot_algorithm_comparison(
             drone_ids=drone_labels,
             data_a=early_metrics,  
@@ -262,7 +263,7 @@ if __name__ == "__main__":
             name_b="Normal Switching", 
             globals_b={"time": normal_time, "coverage": normal_cov}
         )
-
+    '''
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
                                 drone_labels, early_metrics, early_time, early_cov)
         

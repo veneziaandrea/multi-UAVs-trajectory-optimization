@@ -564,6 +564,3 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 round(global_time, 2),
                 round(global_cov, 2)
             ])
-
-    file_size_kb = os.path.getsize(file_path) / 1024
-    print(f"💾 Appended {len(drone_ids)} rows to {file_path.name} (Current Size: {file_size_kb:.2f} KB)")
