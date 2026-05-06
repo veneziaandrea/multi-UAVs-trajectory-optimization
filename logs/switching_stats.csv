@@ -1,0 +1,6 @@
+"Map_Seed", "Overlap_Factor", "Algorithm", "Drone_ID", "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", "Total_Time_s", "Coverage_pct"
+3,0.3,Early,Drone 0,1.8585,1630.6137,3.7585,38.45,99.55
+3,0.3,Early,Drone 1,1.654,2771.8885,3.8261,38.45,99.55
+3,0.3,Early,Drone 2,1.7863,2192.4623,3.8728,38.45,99.55
+3,0.3,Early,Drone 3,2.027,2043.6601,3.9629,38.45,99.55
+3,0.3,Early,Drone 4,2.1059,1995.7484,3.7978,38.45,99.55

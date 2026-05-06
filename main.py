@@ -23,7 +23,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP, run_swarm_simulation
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison, save_metrics_to_csv
 
 def spawn_swarm():
     """Generates a brand new set of drones"""
@@ -130,136 +130,150 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
+    csv_filepath = ROOT / "logs" / "switching_stats.csv"
 
-    # Set random seed for reproducibility
-    seed_everything(config["seed"])
+    seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
 
-    # Build the demo environment and get initial drone positions
-    L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
-    
-    # Visualize the Voronoi partition together with obstacles and initial drone positions
-    plot_voronoi_partition(
-        map3d,
-        vor,
-        drone_positions=drone_positions,
-        waypoints=waypoints,
-        title="Voronoi Partition of the Workspace",
-    )
-
-    
-    # Extract 3D coordinates (x, y, and half the height for the z-center)
-    obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
-    # Create an array of radii to match the order of the tree
-    obs_radii = np.array([obs.radius for obs in map3d.obstacles])
-    # Create obstacles object in a way that is actually fast to use 
-    obs_tree = KDTree(obstacle_coords)
-    obstacles = map3d.obstacles
-
-    wp_tree = KDTree(waypoints)
-
-    # SETUP MPC
-    # Imposta ogni quante iterazioni vuoi vedere il report
-    PRINT_INTERVAL = 10
-    num_neighbors = len(drone_positions) - 1
-
-    # take the prediction horizon and time interval from config file
-    config_path = ROOT / "configs" / "optimization_params.json"
-    config = load_config(config_path)
-    mpc_cfg = config["mpc"]
-    N = mpc_cfg["prediction_horizon"]
-    dt = mpc_cfg["timestep"]
-    max_iter = mpc_cfg["max_iter"]
-
-    # --- INITIALIZATION ---
-    drones = []
-    drone_ids = [0] * len(drone_positions)
-    for i in range(len(drone_positions)):
-        drone_ids[i] = i
-
-    # assign the waypoints to the associated drone
-    assign_area(vor, drone_positions)
-
-    # Add the 'seen' column to the global waypoints matrix ---
-    # If waypoints is [N x 2], this makes it [N x 3]
-    if waypoints.shape[1] == 2:
-        seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
-        waypoints = np.hstack((waypoints, seen_column)) # Attach it
-
-    # --- MAIN MPC LOOP ---
-    dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-    ego_accel_prev = 0
-    t_solve_avg = 0
-    early_swtiching_flag = False
-    
-    drones_normal = spawn_swarm()
-    drones_normal, cost_hist_normal = run_swarm_simulation(
-        drones_normal, dt, max_iter, config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
-    )
-    
-    # Extract Normal Metrics
-    normal_metrics = {"speed": [], "jerk": [], "miss": []}
-    for drone in drones_normal:
-        report = evaluate_trajectory_performance(drone, dt)
-        normal_metrics["speed"].append(report["avg_cornering_speed"])
-        normal_metrics["jerk"].append(report["jerk"])
-        normal_metrics["miss"].append(report["avg_miss_distance"])
+    for test_seed in seed_list:
+        # Set random seed for reproducibility
+        # seed_everything(config["seed"])
+        seed_everything(test_seed)
+        # Build the demo environment and get initial drone positions
+        L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
         
-    # Calculate global time/coverage for Normal run
-    res = 0.2 #map resolution
-    normal_time = len(drones_normal[0].history_p) * dt
-    normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
+        '''
+        # Visualize the Voronoi partition together with obstacles and initial drone positions
+        plot_voronoi_partition(
+            map3d,
+            vor,
+            drone_positions=drone_positions,
+            waypoints=waypoints,
+            title="Voronoi Partition of the Workspace",
+        )
+        '''
 
-    # ==========================================
-    # RUN 2: EARLY SWITCHING
-    # ==========================================
-    print("\n" + "="*50)
-    print(" STARTING RUN 2: EARLY SWITCHING")
-    print("="*50)
+        # Extract 3D coordinates (x, y, and half the height for the z-center)
+        obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
+        # Create an array of radii to match the order of the tree
+        obs_radii = np.array([obs.radius for obs in map3d.obstacles])
+        # Create obstacles object in a way that is actually fast to use 
+        obs_tree = KDTree(obstacle_coords)
+        obstacles = map3d.obstacles
 
-    early_swtiching_flag = True
-    
-    drones_early = spawn_swarm() 
-    drones_early, cost_hist_early = run_swarm_simulation(
-        drones_early, dt, max_iter, config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
-    )
-    
-    # Extract Early Metrics
-    early_metrics = {"speed": [], "jerk": [], "miss": []}
-    drone_labels = []
-    for drone in drones_early:
-        report = evaluate_trajectory_performance(drone, dt)
-        early_metrics["speed"].append(report["avg_cornering_speed"])
-        early_metrics["jerk"].append(report["jerk"])
-        early_metrics["miss"].append(report["avg_miss_distance"])
+        wp_tree = KDTree(waypoints)
+
+        # SETUP MPC
+        # Imposta ogni quante iterazioni vuoi vedere il report
+        PRINT_INTERVAL = 10
+        num_neighbors = len(drone_positions) - 1
+
+        # take the prediction horizon and time interval from config file
+        config_path = ROOT / "configs" / "optimization_params.json"
+        opt_config = load_config(config_path)
+        mpc_cfg = opt_config["mpc"]
+        N = mpc_cfg["prediction_horizon"]
+        dt = mpc_cfg["timestep"]
+        max_iter = mpc_cfg["max_iter"]
+        current_overlap = opt_config["constraints"]["overlap_factor"]
+
+        # --- INITIALIZATION ---
+        drones = []
+        drone_ids = [0] * len(drone_positions)
+        for i in range(len(drone_positions)):
+            drone_ids[i] = i
+
+        # assign the waypoints to the associated drone
+        assign_area(vor, drone_positions)
+
+        # Add the 'seen' column to the global waypoints matrix ---
+        # If waypoints is [N x 2], this makes it [N x 3]
+        if waypoints.shape[1] == 2:
+            seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
+            waypoints = np.hstack((waypoints, seen_column)) # Attach it
+
+        # --- MAIN MPC LOOP ---
+        dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
+        ego_accel_prev = 0
+        t_solve_avg = 0
+        early_swtiching_flag = False
+        
+        drones_normal = spawn_swarm()
+        drones_normal, cost_hist_normal = run_swarm_simulation(
+            drones_normal, dt, max_iter, opt_config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
+        )
+        
+        # Extract Normal Metrics
+        normal_metrics = {"speed": [], "jerk": [], "miss": []}
+        drone_labels = []
+        for drone in drones_normal:
+            report = evaluate_trajectory_performance(drone, dt)
+            normal_metrics["speed"].append(report["avg_cornering_speed"])
+            normal_metrics["jerk"].append(report["jerk"])
+            normal_metrics["miss"].append(report["avg_miss_distance"])
+
         drone_labels.append(f"Drone {drone.id}")
-        
-    early_time = len(drones_early[0].history_p) * dt
-    early_cov, _ = calculate_final_coverage(drones_early, map_limits, L, W, res)
+            
+        # Calculate global time/coverage for Normal run
+        res = 0.2 #map resolution
+        normal_time = len(drones_normal[0].history_p) * dt
+        normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
+        save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Normal", 
+                            drone_labels, normal_metrics, normal_time, normal_cov)
 
-    # ==========================================
-    # PHASE 3: AUTOMATED COMPARISON PLOT
-    # ==========================================
-    print("\nGenerating Final Performance Comparison...")
-    
-    plot_algorithm_comparison(
-        drone_ids=drone_labels,
-        data_a=early_metrics,  
-        name_a="Early Switching",  
-        globals_a={"time": early_time, "coverage": early_cov},
+        # ==========================================
+        # RUN 2: EARLY SWITCHING
+        # ==========================================
+        print("\n" + "="*50)
+        print(" STARTING RUN 2: EARLY SWITCHING")
+        print("="*50)
+
+        early_swtiching_flag = True
         
-        data_b=normal_metrics, 
-        name_b="Normal Switching", 
-        globals_b={"time": normal_time, "coverage": normal_cov}
-    )
-    
-    # (Optional: Show the 3D map or animation for the Early Switching run)
-    plot_results(drones_early, map3d.obstacles)
+        drones_early = spawn_swarm() 
+        drones_early, cost_hist_early = run_swarm_simulation(
+            drones_early, dt, max_iter, opt_config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
+        )
+        
+        # Extract Early Metrics
+        early_metrics = {"speed": [], "jerk": [], "miss": []}
+        drone_labels = []
+        for drone in drones_early:
+            report = evaluate_trajectory_performance(drone, dt)
+            early_metrics["speed"].append(report["avg_cornering_speed"])
+            early_metrics["jerk"].append(report["jerk"])
+            early_metrics["miss"].append(report["avg_miss_distance"])
+            drone_labels.append(f"Drone {drone.id}")
+            
+        early_time = len(drones_early[0].history_p) * dt
+        early_cov, _ = calculate_final_coverage(drones_early, map_limits, L, W, res)
+
+        # ==========================================
+        # PHASE 3: AUTOMATED COMPARISON PLOT
+        # ==========================================
+        print("\nGenerating Final Performance Comparison...")
+        
+        plot_algorithm_comparison(
+            drone_ids=drone_labels,
+            data_a=early_metrics,  
+            name_a="Early Switching",  
+            globals_a={"time": early_time, "coverage": early_cov},
+            
+            data_b=normal_metrics, 
+            name_b="Normal Switching", 
+            globals_b={"time": normal_time, "coverage": normal_cov}
+        )
+
+        save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
+                                drone_labels, early_metrics, early_time, early_cov)
+        
+        # (Optional: Show the 3D map or animation for the Early Switching run)
+        # plot_results(drones_early, map3d.obstacles)
 
         # Plot the apllied inputs and velocities
-    plot_kinematics(drones_early, dt)
+        # plot_kinematics(drones_early, dt)
 
-    animate_simulation(drones_early, map3d.obstacles, map_limits)
+        # animate_simulation(drones_early, map3d.obstacles, map_limits)
 
-    res = 0.2 # Resolution
-    final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
-    print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+        # res = 0.2 # Resolution
+        # final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
+        # print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
