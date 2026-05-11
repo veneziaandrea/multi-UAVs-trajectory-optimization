@@ -24,7 +24,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP, run_swarm_simulation
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison, save_metrics_to_csv
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_offline_csv_comparison, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison, save_metrics_to_csv
 
 def spawn_swarm():
     """Generates a brand new set of drones"""
@@ -124,14 +124,13 @@ def build_demo(config):
 
     return L, W, map3d, vor, drone_positions, waypoints
 
-
 if __name__ == "__main__":
     # Load configuration
     config_path = ROOT / "configs" / "demo_parameters.json"
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "switching_stats.csv"
+    csv_filepath = ROOT / "logs" / "switch_stats_dist_+15cm_as_seen.csv"
 
     seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
 
@@ -142,7 +141,6 @@ if __name__ == "__main__":
         seed_everything(test_seed)
         # Build the demo environment and get initial drone positions
         L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
-        
         '''
         # Visualize the Voronoi partition together with obstacles and initial drone positions
         plot_voronoi_partition(
@@ -241,7 +239,7 @@ if __name__ == "__main__":
         res = 0.2
         normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
         
-        # Save (notice global_time is removed from the arguments)
+        # Save 
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Normal", 
                             drone_labels, normal_metrics, normal_cov)
 
@@ -303,8 +301,11 @@ if __name__ == "__main__":
         # ==========================================
         # PHASE 3: AUTOMATED COMPARISON PLOT
         # ==========================================
-        print("\nGenerating Final Performance Comparison...")
+        # print("\nGenerating Final Performance Comparison...")
         '''
+        early_time = max(early_metrics["time"])
+        normal_time = max(normal_metrics["time"])
+        
         plot_algorithm_comparison(
             drone_ids=drone_labels,
             data_a=early_metrics,  
@@ -315,8 +316,10 @@ if __name__ == "__main__":
             name_b="Normal Switching", 
             globals_b={"time": normal_time, "coverage": normal_cov}
         )
-    '''
-         
+        ''' 
+
+    plot_offline_csv_comparison(csv_filepath)
+    '''    
     # Load the database
     df = pd.read_csv(csv_filepath)
 
@@ -337,14 +340,15 @@ if __name__ == "__main__":
     print("\n=== AVERAGE PERFORMANCE ACROSS ALL MAPS ===")
     print(summary.to_string())
         
-        # (Optional: Show the 3D map or animation for the Early Switching run)
-        # plot_results(drones_early, map3d.obstacles)
+    # (Optional: Show the 3D map or animation for the Early Switching run)
+    plot_results(drones_early, map3d.obstacles)
 
-        # Plot the apllied inputs and velocities
-        # plot_kinematics(drones_early, dt)
+    # Plot the apllied inputs and velocities
+    # plot_kinematics(drones_early, dt)
 
-        # animate_simulation(drones_early, map3d.obstacles, map_limits)
+    animate_simulation(drones_early, map3d.obstacles, map_limits)
 
-        # res = 0.2 # Resolution
-        # final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
-        # print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+    res = 0.2 # Resolution
+    final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
+    print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
+    '''

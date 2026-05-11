@@ -847,7 +847,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
     Executes the MPC loop for the entire swarm until all drones are parked or max_iter is reached.
     """
     num_iter = 0
-    switch_distance = dist_threshold + 0.25
+    switch_distance = dist_threshold + 0.15
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     
@@ -946,7 +946,10 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
             total_loop_cost += current_cost_value
 
             drone.drone_model(accel, dt)
-            drone.check_waypoints(dist_threshold)
+            if early_switch_flag == False:
+                drone.check_waypoints(dist_threshold)
+            else : 
+                drone.check_waypoints(switch_distance)
             drone.log_telemetry(new_traj)
             drone.last_traj = new_traj
             drone.history_a.append(accel)
