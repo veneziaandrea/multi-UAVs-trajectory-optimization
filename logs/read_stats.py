@@ -108,5 +108,5 @@ def plot_offline_csv_comparison(csv_filepath):
     plt.show()
 
 if __name__ == "__main__":
-    filepath = "logs/switch_stats_seen_dist*2.csv"
+    filepath = "logs/switch_stats_seen_distx2.csv"
     plot_offline_csv_comparison(filepath)

@@ -130,7 +130,7 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "switch_stats_seen_dist*2.csv"
+    csv_filepath = ROOT / "logs" / "switch_stats_seen_distx2.csv"
 
     seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
     # seed_list = [3]
