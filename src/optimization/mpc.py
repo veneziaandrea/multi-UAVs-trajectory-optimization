@@ -847,7 +847,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
     Executes the MPC loop for the entire swarm until all drones are parked or max_iter is reached.
     """
     num_iter = 0
-    switch_distance = dist_threshold + 0.15
+    switch_distance = dist_threshold * 2
     dJ_thresh = 1e-6
     prev_total_cost = 1e6
     
@@ -896,13 +896,14 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
                         current_focus_vector[1] = 1.0  
                 else: 
                     current_focus_vector[0] = 1.0
-            
-            # --- 3. PARKING LOGIC ---
+        
             if drone.returning_home and not drone.is_parked:
-                dist_to_home = np.linalg.norm(drone.state["p"][:2] - drone.home_pos[:2])
-                if dist_to_home < dist_threshold:
+                
+                # Check if the very last waypoint (the home waypoint) has been marked as seen (1)
+                # This perfectly syncs your parking state with whatever threshold you gave check_waypoints!
+                if drone.waypoints[-1, 2] == 1:
                     print(f"Drone {drone.id} has parked safely!")
-                    drone.is_parked = True 
+                    drone.is_parked = True
 
             if drone.is_parked:
                 drone.state["v"] = np.zeros(3)
@@ -967,4 +968,4 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
         prev_total_cost = total_loop_cost
         num_iter += 1
 
-    return drones, cost_history     
+    return drones, cost_history, average_time   

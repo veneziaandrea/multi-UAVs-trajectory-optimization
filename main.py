@@ -24,7 +24,7 @@ from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_p
 from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP, run_swarm_simulation
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_offline_csv_comparison, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, plot_algorithm_comparison, save_metrics_to_csv
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_offline_csv_comparison, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, save_metrics_to_csv
 
 def spawn_swarm():
     """Generates a brand new set of drones"""
@@ -130,10 +130,10 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "switch_stats_dist_+15cm_as_seen.csv"
+    csv_filepath = ROOT / "logs" / "switch_stats_seen_dist*2.csv"
 
     seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
-
+    # seed_list = [3]
     for test_seed in seed_list:
         # Set random seed for reproducibility
         # seed_everything(config["seed"])
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         early_swtiching_flag = False
         
         drones_normal = spawn_swarm()
-        drones_normal, cost_hist_normal = run_swarm_simulation(
+        drones_normal, cost_hist_normal, avg_solve_time = run_swarm_simulation(
             drones_normal, dt, max_iter, opt_config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
         )
         
@@ -253,7 +253,7 @@ if __name__ == "__main__":
         early_swtiching_flag = True
         
         drones_early = spawn_swarm() 
-        drones_early, cost_hist_early = run_swarm_simulation(
+        drones_early, cost_hist_early, early_avg_solve_time = run_swarm_simulation(
             drones_early, dt, max_iter, opt_config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
         )
         
@@ -302,10 +302,10 @@ if __name__ == "__main__":
         # PHASE 3: AUTOMATED COMPARISON PLOT
         # ==========================================
         # print("\nGenerating Final Performance Comparison...")
-        '''
+        
         early_time = max(early_metrics["time"])
         normal_time = max(normal_metrics["time"])
-        
+        '''
         plot_algorithm_comparison(
             drone_ids=drone_labels,
             data_a=early_metrics,  
@@ -316,39 +316,20 @@ if __name__ == "__main__":
             name_b="Normal Switching", 
             globals_b={"time": normal_time, "coverage": normal_cov}
         )
-        ''' 
+        '''
 
-    plot_offline_csv_comparison(csv_filepath)
-    '''    
-    # Load the database
-    df = pd.read_csv(csv_filepath)
-
-    tot_rows = df.count(axis=1)
-
-    df = df[df["Final_State"] == "Success"]
-
-    success_rows = df.count(axis=1)
-
-    print(f"Early Switching Success Rate: {success_rows}/{tot_rows}")
-
-    # Group the data by Algorithm, and calculate the MEAN across all maps and drones
-    summary = df.groupby("Algorithm").mean(numeric_only=True)
-
-    # Drop the Map_Seed column from the summary (since averaging the seed ID is meaningless)
-    summary = summary.drop(columns=["Map_Seed"])
-
-    print("\n=== AVERAGE PERFORMANCE ACROSS ALL MAPS ===")
-    print(summary.to_string())
-        
+    # plot_offline_csv_comparison(csv_filepath)
+      
     # (Optional: Show the 3D map or animation for the Early Switching run)
     plot_results(drones_early, map3d.obstacles)
 
     # Plot the apllied inputs and velocities
-    # plot_kinematics(drones_early, dt)
+    plot_kinematics(drones_early, dt)
 
     animate_simulation(drones_early, map3d.obstacles, map_limits)
 
     res = 0.2 # Resolution
     final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
     print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
-    '''
+    print(f"Early Switch Average solve time: {early_avg_solve_time} ms")
+    print(f"Normal Switch Average solve time: {avg_solve_time} ms")

@@ -12,9 +12,9 @@ def plot_offline_csv_comparison(csv_filepath):
     
     # Optional but highly recommended: Filter out "Stuck" drones 
     # so they don't poison the average flight times and speeds
-    df_success = df[df['Final_State'] == 'Success']
-    
+    #df_success = df[df['Final_State'] == 'Success']
     # 2. Identify the algorithms being compared (e.g., 'Normal' and 'Early')
+    df_success = df
     algos = df_success['Algorithm'].unique()
     if len(algos) != 2:
         print(f"Warning: Expected exactly 2 algorithms, found {len(algos)}: {algos}")
@@ -108,5 +108,5 @@ def plot_offline_csv_comparison(csv_filepath):
     plt.show()
 
 if __name__ == "__main__":
-    filepath = "logs/switch_stats_dist_+15cm_as_seen.csv"
+    filepath = "logs/switch_stats_seen_dist*2.csv"
     plot_offline_csv_comparison(filepath)
