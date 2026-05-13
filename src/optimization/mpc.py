@@ -868,8 +868,8 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
         # Check if ALL drones have finished their tasks
         if all(d.is_parked for d in drones):
             print(f"\nMission accomplished in {num_iter} steps!")
-            average_time = total_solver_time / total_solver_calls if total_solver_calls > 0 else 0
-            print(f"Avg Solve Time: {average_time:.5f} seconds")
+            # average_time = total_solver_time / total_solver_calls if total_solver_calls > 0 else 0
+            # print(f"Avg Solve Time: {average_time:.5f} seconds")
             break
 
         for i, drone in enumerate(drones):
@@ -967,5 +967,8 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
             
         prev_total_cost = total_loop_cost
         num_iter += 1
+    
+    if total_solver_calls > 0:
+        average_time = total_solver_time / total_solver_calls
 
     return drones, cost_history, average_time   
