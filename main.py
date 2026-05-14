@@ -130,11 +130,12 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "switch_stats_seen_distx2.csv"
+    csv_filepath = ROOT / "logs" / "switch_stats_40obs_def.csv"
 
-    # seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
+    seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
     # seed_list = [3]
-    seed_list = [25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
+    # seed_list = [25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
+    
     for test_seed in seed_list:
         # Set random seed for reproducibility
         # seed_everything(config["seed"])
@@ -204,38 +205,87 @@ if __name__ == "__main__":
         )
         
         # Extract Normal Metrics
-        normal_metrics = {"speed": [], "jerk": [], "miss": [], "state": [], "time": []}
+        normal_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
         drone_labels = []
+        mass = 1.0 # kg
+        safety_radius = 0.5 # non avevo voglia di prenderlo dal json
+
         for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
             normal_metrics["speed"].append(report["avg_cornering_speed"])
             normal_metrics["jerk"].append(report["jerk"])
             normal_metrics["miss"].append(report["avg_miss_distance"])
+
+            # ---> 2. EXACT TIME & ENERGY CALCULATION <---
+            v_mag = np.linalg.norm(drone.history_v, axis=1)
+            a_mag = np.linalg.norm(drone.history_a, axis=1)
             
-            # --- EXACT TIME & STATE CALCULATION ---
             if drone.is_parked:
                 status = "Success"
-                
-                # Calculate the magnitude of velocity at every timestep
-                v_mag = np.linalg.norm(drone.history_v, axis=1)
-                
-                # Find the very last index where velocity was not zero
-                if np.any(v_mag > 1e-5):
-                    # np.max(np.nonzero) gets the last active index. Add 1 for total steps.
-                    active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1
-                else:
-                    active_steps = 0
-                    
+                active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1 if np.any(v_mag > 1e-5) else 0
                 drone_time = active_steps * dt
+                
+                # ---> THE CORRECTED ENERGY MATH <---
+                # 1. Get the 3D acceleration vectors for the active flight time
+                active_a_3d = np.array(drone.history_a[:active_steps], dtype=float)
+                
+                # 2. Add Gravity (9.81 m/s^2) to the Z-axis to get true motor thrust requirement
+                active_a_3d[:, 2] += 9.81 
+                
+                # 3. Calculate total thrust magnitude: || T || = m * || a + g ||
+                thrust_mag = mass * np.linalg.norm(active_a_3d, axis=1)
+                
+                # 4. Integrate Squared Thrust over time (Standard MPC Energy Proxy)
+                drone_energy = np.sum(thrust_mag**2) * dt
+                
             else:
                 status = "Stuck"
-                # If it got stuck, it spent the entire simulation flying/trying
                 drone_time = len(drone.history_p) * dt
-
-            normal_metrics["state"].append(status)
-            normal_metrics["time"].append(drone_time) # Append the exact time
-            drone_labels.append(f"Drone {drone.id}")
+                
+                # Same math, but for the entire trapped duration
+                a_3d = np.array(drone.history_a, dtype=float)
+                a_3d[:, 2] += 9.81
+                thrust_mag = mass * np.linalg.norm(a_3d, axis=1)
+                drone_energy = np.sum(thrust_mag**2) * dt
             
+            # ---> 2. KD-TREE DISCRETE COLLISION COUNTER <---
+            collision_events = 0
+            in_collision = False
+            
+            # Find the max radius once so the KD-Tree knows how wide to cast its net
+            max_search_radius = np.max(obs_radii) + safety_radius
+            
+            for p in drone.history_p:
+                step_collision = False
+                
+                # Ask the KD-Tree for the indices of obstacles that are strictly nearby
+                # (p is your [x,y,z] coordinate from the history)
+                nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
+                
+                # Only loop through the 1 or 2 obstacles the tree found
+                for idx in nearby_obs_indices:
+                    obs = map3d.obstacles[idx]
+                    
+                    # Exact 2D distance check against the specific obstacle's actual radius
+                    dist = np.hypot(p[0] - obs.x, p[1] - obs.y)
+                    if dist <= (obs.radius + 0.25*safety_radius):
+                        step_collision = True
+                        break # Found a hit, no need to check other nearby obstacles
+                
+                # Discrete event tracking logic
+                if step_collision and not in_collision:
+                    collision_events += 1
+                    in_collision = True
+                elif not step_collision:
+                    in_collision = False
+
+            
+            normal_metrics["state"].append(status)
+            normal_metrics["time"].append(drone_time) 
+            normal_metrics["energy"].append(drone_energy) 
+            normal_metrics["collisions"].append(collision_events)
+            drone_labels.append(f"Drone {drone.id}")
+
         # Calculate global coverage 
         res = 0.2
         normal_cov, _ = calculate_final_coverage(drones_normal, map_limits, L, W, res)
@@ -259,7 +309,7 @@ if __name__ == "__main__":
         )
         
         # Extract Early Metrics
-        early_metrics = {"speed": [], "jerk": [], "miss": [], "state": [], "time": []}
+        early_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
         drone_labels = []
         for drone in drones_early:
             report = evaluate_trajectory_performance(drone, dt)
@@ -267,28 +317,73 @@ if __name__ == "__main__":
             early_metrics["jerk"].append(report["jerk"])
             early_metrics["miss"].append(report["avg_miss_distance"])
             
-            # ---> 2. EXACT TIME & STATE CALCULATION <---
+            # ---> 2. EXACT TIME & ENERGY CALCULATION <---
+            v_mag = np.linalg.norm(drone.history_v, axis=1)
+            a_mag = np.linalg.norm(drone.history_a, axis=1)
+            
             if drone.is_parked:
                 status = "Success"
-                
-                # Calculate the magnitude of velocity at every timestep
-                v_mag = np.linalg.norm(drone.history_v, axis=1)
-                
-                # Find the very last index where velocity was not zero
-                if np.any(v_mag > 1e-5):
-                    # np.max(np.nonzero) gets the last active index. Add 1 for total steps.
-                    active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1
-                else:
-                    active_steps = 0
-                    
+                active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1 if np.any(v_mag > 1e-5) else 0
                 drone_time = active_steps * dt
+                
+                # ---> THE CORRECTED ENERGY MATH <---
+                # 1. Get the 3D acceleration vectors for the active flight time
+                active_a_3d = np.array(drone.history_a, float)
+                
+                # 2. Add Gravity (9.81 m/s^2) to the Z-axis to get true motor thrust requirement
+                active_a_3d[:, 2] += 9.81 
+                
+                # 3. Calculate total thrust magnitude: || T || = m * || a + g ||
+                thrust_mag = mass * np.linalg.norm(active_a_3d, axis=1)
+                
+                # 4. Integrate Squared Thrust over time (Standard MPC Energy Proxy)
+                drone_energy = np.sum(thrust_mag**2) * dt
+                
             else:
                 status = "Stuck"
-                # If it got stuck, it spent the entire simulation flying/trying
                 drone_time = len(drone.history_p) * dt
+                
+                # Same math, but for the entire trapped duration
+                a_3d = np.array(drone.history_a, float)
+                a_3d[:, 2] += 9.81
+                thrust_mag = mass * np.linalg.norm(a_3d, axis=1)
+                drone_energy = np.sum(thrust_mag**2) * dt
+
+            # ---> 2. KD-TREE DISCRETE COLLISION COUNTER <---
+            collision_events = 0
+            in_collision = False
+            
+            # Find the max radius once so the KD-Tree knows how wide to cast its net
+            max_search_radius = np.max(obs_radii) + safety_radius
+            
+            for p in drone.history_p:
+                step_collision = False
+                
+                # Ask the KD-Tree for the indices of obstacles that are strictly nearby
+                # (p is your [x,y,z] coordinate from the history)
+                nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
+                
+                # Only loop through the 1 or 2 obstacles the tree found
+                for idx in nearby_obs_indices:
+                    obs = map3d.obstacles[idx]
+                    
+                    # Exact 2D distance check against the specific obstacle's actual radius
+                    dist = np.hypot(p[0] - obs.x, p[1] - obs.y)
+                    if dist <= (obs.radius + 0.25*safety_radius):
+                        step_collision = True
+                        break # Found a hit, no need to check other nearby obstacles
+                
+                # Discrete event tracking logic
+                if step_collision and not in_collision:
+                    collision_events += 1
+                    in_collision = True
+                elif not step_collision:
+                    in_collision = False
 
             early_metrics["state"].append(status)
-            early_metrics["time"].append(drone_time) # Append the exact time
+            early_metrics["time"].append(drone_time) 
+            early_metrics["energy"].append(drone_energy)
+            early_metrics["collisions"].append(collision_events) 
             drone_labels.append(f"Drone {drone.id}")
             
         # Calculate global coverage 

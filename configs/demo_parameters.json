@@ -4,7 +4,7 @@
         "x_bounds": [0.0, 40.0],
         "y_bounds": [0.0, 40.0],
         "z_bounds": [0.0, 20.0],
-        "num_obstacles": 30,
+        "num_obstacles": 40,
         "density": 0.5,
         "obstacle_radius_range": [0.5, 1.5],
         "obstacle_height_range": [4.0, 18.0]
