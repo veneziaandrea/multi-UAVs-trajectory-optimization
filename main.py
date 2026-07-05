@@ -22,10 +22,10 @@ from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
 from partition.voronoi import Voronoi_Partition, assign_area, get_waypoints_in_partition
-from optimization.mpc import run_mpc_iteration, setup_MPC_NLP, setup_test_MPC, setup_test_MPC_QP, run_swarm_simulation
+from optimization.mpc import run_mpc_iteration, setup_MPC_QP, run_swarm_simulation
 from optimization.waypoints_sorter import sort_waypoints_tsp
 from utils.drones import Drone
-from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_offline_csv_comparison, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, save_metrics_to_csv
+from optimization.optimization_plots import plot_results, animate_simulation, plot_kinematics, calculate_final_coverage, plot_coverage_map, plot_energy_consumption, evaluate_trajectory_performance, save_metrics_to_csv
 
 def spawn_swarm():
     """Generates a brand new set of drones"""
@@ -38,7 +38,7 @@ def spawn_swarm():
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
         waypoints_ordered = sort_waypoints_tsp(drone_positions[id_d], waypoints_assigned)
 
-        vars_ = setup_test_MPC_QP(num_neighbors=num_neighbors, enable_obstacles=True) 
+        vars_ = setup_MPC_QP(num_neighbors=num_neighbors, enable_obstacles=True) 
         new_drone = Drone(id_d, drone_positions[id_d], waypoints_ordered, vars_, N)
         
         new_drone.returning_home = False

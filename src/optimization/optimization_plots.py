@@ -13,7 +13,7 @@ def plot_results(drones, obstacles):
     fig = plt.figure(figsize=(12, 9))
     ax = fig.add_subplot(111, projection='3d')
 
-    # --- 1. Plot Obstacles as Actual 3D Cylinders ---
+    # Plot Obstacles as 3D Cylinders
     for obs in obstacles:
         # Create cylinder geometry
         z_range = np.linspace(0, obs.height, 20)
@@ -26,22 +26,22 @@ def plot_results(drones, obstacles):
                         color='r', 
                         alpha=0.3, 
                         shade=False)
-        # Optional: Add a cap on top
+        # Add a cap on top
         ax.plot_wireframe(x_grid, y_grid, z_grid, color='r', alpha=0.1, linewidth=0.5)
 
-    # --- 2. Plot Waypoints ---
+    # Plot Waypoints
     for drone in drones:
         wps = drone.waypoints 
         # Placed at Z=0.2 so they don't clip into the floor
         ax.scatter(wps[:, 0], wps[:, 1], 0.2, marker='*', s=100, 
                    color='gold', edgecolors='k', label=f'WPs Drone {drone.id}')
 
-    # --- 3. Plot Drone Trajectories ---
+    # Plot drone trajectories 
     colors = ['blue', 'green', 'magenta', 'cyan', 'orange']
     for i, drone in enumerate(drones):
         path = np.array(drone.history_p)
         if len(path) > 0:
-            # Plot the actual 3D path
+            # Plot the 3D path
             ax.plot(path[:, 0], path[:, 1], path[:, 2], 
                     color=colors[i % len(colors)], linewidth=3, label=f'Drone {drone.id}')
             
@@ -58,11 +58,10 @@ def plot_results(drones, obstacles):
     ax.set_ylim(0, 40)
     ax.set_zlim(0, 20) 
 
-    # --- THE FIX: ORTHOGRAPHIC BIRD'S EYE VIEW ---
-    # 1. Orthographic projection removes perspective distortion (leaning cylinders)
+    # Orthographic projection removes perspective distortion
     ax.set_proj_type('ortho') 
     
-    # 2. elev=90 points the camera straight down. azim=-90 aligns X/Y to a standard 2D grid.
+    # elev=90 points the camera straight down. azim=-90 aligns X/Y to a standard 2D grid.
     ax.view_init(elev=90, azim=-90)
 
     plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
@@ -79,7 +78,7 @@ def animate_simulation(drones, obstacles, map_limits):
         ax.set_ylim(map_limits[1])
         ax.set_aspect('equal')
         
-        # Draw Obstacles as real circles
+        # Draw obstacles as real circles
         for obs in obstacles:
             circle = plt.Circle((obs.x, obs.y), obs.radius, color='red', alpha=0.4)
             ax.add_patch(circle)
@@ -101,11 +100,11 @@ def animate_simulation(drones, obstacles, map_limits):
                 # Drone body
                 ax.plot(pos[0], pos[1], 'ko', markersize=6)
                 
-                # --- NEW: Safely fetch the prediction ---
+                # Fetch the prediction ---
                 if frame < len(drone.history_predictions):
                     pred = drone.history_predictions[frame]
                 elif len(drone.history_predictions) > 0:
-                    # If we run out of predictions, just show the final parked one
+                    # If it runs out of predictions, just shows the final parked one
                     pred = drone.history_predictions[-1] 
                 else:
                     pred = None
@@ -139,7 +138,7 @@ def plot_kinematics(drones, dt):
         path = np.array(drone.history_p)
         col_color = colors[i % len(colors)]
         
-        # 1. Calculate and Plot Velocity (Top Row)
+        # Calculate and plot velocity 
         ax_v = axes[0, i]
         if len(path) > 1:
             velocities = np.diff(path, axis=0) / dt
@@ -155,7 +154,7 @@ def plot_kinematics(drones, dt):
             ax_v.grid(True, ls="--", alpha=0.5)
             ax_v.legend(loc="upper right", fontsize='small')
 
-        # 2. Plot Acceleration (Bottom Row)
+        # Plot acceleration
         ax_a = axes[1, i]
         if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
             true_accel = np.array(drone.history_a)
@@ -186,18 +185,17 @@ def calculate_final_coverage(drones, map_limits, L, W, res=0.5):
     for drone in drones:
         # Convert history to arrays
         pos_hist = np.array(drone.history_p) 
-        # Calculate headings from positions if velocity history isn't explicit
-        # or use drone.history_v if you logged it[cite: 14]
+        # Calculate headings from positions if velocity history isn't explicit or use drone.history_v 
         
         for i in range(1, len(pos_hist)):
             curr_p = pos_hist[i]
             prev_p = pos_hist[i-1]
             
-            # 1. Determine rotation (heading)
+            # Determine rotation (heading)
             dx, dy = curr_p[0] - prev_p[0], curr_p[1] - prev_p[1]
             theta = np.arctan2(dy, dx) if (abs(dx) > 1e-3 or abs(dy) > 1e-3) else 0
             
-            # 2. Local frame transformation
+            # Local frame transformation
             # Translate grid so drone is at origin
             dx_grid = X_grid - curr_p[0]
             dy_grid = Y_grid - curr_p[1]
@@ -206,7 +204,7 @@ def calculate_final_coverage(drones, map_limits, L, W, res=0.5):
             x_local = dx_grid * np.cos(theta) + dy_grid * np.sin(theta)
             y_local = -dx_grid * np.sin(theta) + dy_grid * np.cos(theta)
             
-            # 3. Apply Coverage Mask
+            # Apply coverage mask
             mask = (np.abs(x_local) <= L/2) & (np.abs(y_local) <= W/2)
             grid |= mask # Logical OR to accumulate coverage
 
@@ -216,33 +214,31 @@ def calculate_final_coverage(drones, map_limits, L, W, res=0.5):
 
 def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
     """
-    Disegna la mappa di copertura evidenziando le aree viste e non viste.
+    Draw  the coverage map putting in evidence the not seen/seen areas.
     """
     x_range = np.arange(map_limits[0][0], map_limits[0][1], res)
     y_range = np.arange(map_limits[1][0], map_limits[1][1], res)
     
     fig, ax = plt.subplots(figsize=(10, 10))
     
-    # 1. Disegna la Coverage Heatmap
-    # coverage_grid è una matrice Booleana (True=Visto, False=Non Visto).
-    # Usiamo la colormap 'RdYlGn' (Red-Yellow-Green): Rosso=0 (Non visto), Verde=1 (Visto)
-    # Trasponiamo la griglia (.T) perché imshow inverte gli assi X e Y per default.
-    cmap = plt.get_cmap('RdYlGn')
+    # Draw the Coverage Heatmap
+    # coverage_grid is a boolean matrix (True=Seen, False=Not Seen)
+
+    cmap = plt.get_cmap('RdYlGn') # red/yellow/green map
     ax.imshow(
         coverage_grid.T, 
         origin='lower', 
         extent=[x_range[0], x_range[-1], y_range[0], y_range[-1]], 
         cmap=cmap, 
-        alpha=0.5 # Trasparenza per vedere la griglia sotto
+        alpha=0.5 # Trasparenza per vedere la griglia sotto 
     )
     
-    # 2. Disegna gli Ostacoli
+    # Draw obstacles
     for obs in obstacles:
         circle = Circle((obs.x, obs.y), obs.radius, color='black', alpha=0.7)
         ax.add_patch(circle)
         
-    # 3. Sovrapponi le Traiettorie dei Droni
-    # Questo aiuta a capire PERCHÉ un'area è stata coperta o mancata
+    # Overlap drone trajectories 
     colors = ['blue', 'cyan', 'magenta', 'yellow', 'black']
     for i, drone in enumerate(drones):
         if len(drone.history_p) > 0:
@@ -254,7 +250,7 @@ def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
                 label=f'Drone {drone.id} Path'
             )
             
-    # 4. Formattazione del Grafico
+    # Plot format
     ax.set_title("UAV Swarm Coverage Map\n(Green = Seen, Red = Unseen)", fontsize=16, fontweight='bold')
     ax.set_xlabel("X Position [m]", fontsize=12)
     ax.set_ylabel("Y Position [m]", fontsize=12)
@@ -272,7 +268,7 @@ def calculate_trajectory_energy(history_v, history_a, dt, mass=1.0):
     
     history_v: List or (N, 3) numpy array of velocities [vx, vy, vz]
     history_a: List or (N, 3) numpy array of accelerations [ax, ay, az]
-    dt: Timestep of the simulation (e.g., 0.05s)
+    dt: Timestep of the simulation
     mass: Mass of the drone in kg
     """
     v_arr = np.array(history_v)
@@ -285,30 +281,27 @@ def calculate_trajectory_energy(history_v, history_a, dt, mass=1.0):
     c_drag = 0.25                   # Empirical drag coefficient of the drone frame
     efficiency = 0.7                # Motor/Propeller electrical efficiency
     
-    # HOVER POWER (Constant)
+    # HOVER POWER 
     # Based on Momentum Theory: P = T * sqrt(T / 2*rho*A)
     thrust_hover = mass * 9.81
     p_hover = thrust_hover * np.sqrt(thrust_hover / (2 * rho * prop_area))
     
-    # MECHANICAL POWER (Dynamic)
-    # Force required to generate the commanded acceleration AND fight gravity
+    # MECHANICAL POWER 
+    # Force required to generate the commanded acceleration and fight gravity
     # F = m * (a + g)
     F_thrust = mass * (a_arr + g)
     
-    # Power is the dot product of Force and Velocity (P = F dot V)
     # Using np.sum with axis=1 does a row-wise dot product
-    p_mech = np.sum(F_thrust * v_arr, axis=1)
+    p_mech = np.sum(F_thrust * v_arr, axis=1) 
     
-    # NOTE: Multirotors cannot efficiently regenerate power when braking. 
-    # If p_mech is negative, the energy is mostly lost as heat. We clamp it to 0.
+    # If p_mech is negative the energy is lost, clamp it to 0
     p_mech = np.maximum(p_mech, 0)
     
-    # DRAG POWER (Dynamic)
+    # DRAG POWER 
     # P_drag = drag_coeff * |v|^3
     v_norm = np.linalg.norm(v_arr, axis=1)
     p_drag = c_drag * (v_norm ** 3)
     
-    # --- TOTALS ---
     # Divide mechanical/drag work by motor efficiency to get electrical draw
     power_watts = p_hover + ((p_mech + p_drag) / efficiency)
     
@@ -326,7 +319,6 @@ def plot_energy_consumption(drones, dt, mass=1.0):
     
     drone_ids = []
     total_energies = []
-    # Safe, universal way to pull the colormap
     cmap = plt.get_cmap('tab10')
     colors = cmap(np.linspace(0, 1, len(drones))) # Distinct colors for each drone
     
@@ -342,7 +334,7 @@ def plot_energy_consumption(drones, dt, mass=1.0):
         
         time_axis = np.arange(len(power_watts)) * dt
         
-        # --- TOP PLOT: Instantaneous Power (Watts) ---
+        # Instantaneous power plot [W]
         ax1.plot(time_axis, power_watts, label=f'Drone {drone.id} ({total_energy:.0f} J)', 
                  color=colors[i], linewidth=2, alpha=0.8)
         
@@ -360,7 +352,7 @@ def plot_energy_consumption(drones, dt, mass=1.0):
     ax1.grid(True, linestyle='--', alpha=0.6)
     ax1.legend(loc='upper right')
     
-    # --- BOTTOM PLOT: Total Energy Bar Chart (Joules) ---
+    # Total Energy Bar Chart [J]
     if total_energies:
         bars = ax2.bar(drone_ids, total_energies, color=colors, alpha=0.8, edgecolor='black')
         
@@ -397,7 +389,7 @@ def evaluate_trajectory_performance(drone, dt):
     cornering_speeds = []
     miss_distances = []
     
-    # 1. EVALUATE WAYPOINTS (Cornering Speed & Miss Distance)
+    # EVALUATE WAYPOINTS (Cornering Speed & Miss Distance)
     for i in range(mission_wps.shape[0]):
         target_wp = mission_wps[i, :3]
         
@@ -407,15 +399,15 @@ def evaluate_trajectory_performance(drone, dt):
         # Find the timestep where the drone was closest to the waypoint
         idx_closest = np.argmin(distances)
         
-        # Record the Miss Distance (Coverage Trade-off)
+        # Record the Miss Distance
         min_dist = distances[idx_closest]
         miss_distances.append(min_dist)
         
-        # Record the Cornering Speed (Kinetic Energy Retention)
+        # Record the Cornering Speed
         speed_at_wp = np.linalg.norm(v_arr[idx_closest])
         cornering_speeds.append(speed_at_wp)
 
-    # 2. EVALUATE SMOOTHNESS (Cumulative Jerk)
+    # EVALUATE SMOOTHNESS 
     # Jerk is the derivative of acceleration: (a[k] - a[k-1]) / dt
     jerk_vectors = np.diff(a_arr, axis=0) / dt
     jerk_magnitudes = np.linalg.norm(jerk_vectors, axis=1)
@@ -423,7 +415,7 @@ def evaluate_trajectory_performance(drone, dt):
     # Cumulative sum of squared jerk
     total_jerk_effort = np.sum(jerk_magnitudes**2) * dt
     
-    # 3. EVALUATE MISSION TIME
+    # Evaluate mission time
     total_flight_time = len(p_arr) * dt
     
     # --- PRINT REPORT ---
@@ -448,115 +440,6 @@ def evaluate_trajectory_performance(drone, dt):
         "avg_cornering_speed": avg_speed
     }
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-
-def plot_offline_csv_comparison(csv_filepath):
-    """
-    Reads the offline CSV flight logs, averages the performance across all map seeds,
-    and generates a 3-panel grouped bar chart comparing the two algorithms.
-    """
-    # 1. Load the database
-    df = pd.read_csv(csv_filepath)
-    
-    # Optional but highly recommended: Filter out "Stuck" drones 
-    # so they don't poison the average flight times and speeds
-    df_success = df[df['Final_State'] == 'Success']
-    
-    # 2. Identify the algorithms being compared (e.g., 'Normal' and 'Early')
-    algos = df_success['Algorithm'].unique()
-    if len(algos) != 2:
-        print(f"Warning: Expected exactly 2 algorithms, found {len(algos)}: {algos}")
-        return
-    name_a, name_b = algos[0], algos[1]
-    
-    # 3. Calculate Global Map Averages (Coverage)
-    # Since coverage is duplicated across drone rows for a single map, drop duplicates first
-    global_df = df_success[['Map_Seed', 'Algorithm', 'Coverage_pct']].drop_duplicates()
-    global_stats = global_df.groupby('Algorithm')['Coverage_pct'].mean().to_dict()
-    
-    # 4. Calculate Per-Drone Averages
-    # Group by Algorithm and Drone_ID, then calculate the mean across all Map Seeds
-    drone_stats = df_success.groupby(['Algorithm', 'Drone_ID'])[['Speed_m_s', 'Jerk_m2_s5', 'Flight_Time_s']].mean().reset_index()
-    
-    # Split the data back into the two algorithms and sort to ensure Drone 0 to N align
-    data_a = drone_stats[drone_stats['Algorithm'] == name_a].sort_values('Drone_ID')
-    data_b = drone_stats[drone_stats['Algorithm'] == name_b].sort_values('Drone_ID')
-    
-    drone_ids = data_a['Drone_ID'].tolist()
-    
-    # ==========================================
-    # PLOTTING
-    # ==========================================
-    x = np.arange(len(drone_ids))
-    width = 0.35
-    
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
-    
-    # Global Title (Displays the Averaged Coverage)
-    title_str = (f"Offline Trajectory Analysis: {name_a} vs {name_b} (Averaged across maps)\n"
-                 f"Mean Coverage: {name_a} ({global_stats.get(name_a, 0):.2f}%) vs "
-                 f"{name_b} ({global_stats.get(name_b, 0):.2f}%)")
-    fig.suptitle(title_str, fontsize=14, fontweight='bold', y=0.95)
-    
-    color_a, color_b = '#2ca02c', '#1f77b4' # Green vs Blue
-    
-    # --- Subplot 1: Cornering Speed ---
-    rects1_a = ax1.bar(x - width/2, data_a['Speed_m_s'], width, label=name_a, color=color_a, edgecolor='black')
-    rects1_b = ax1.bar(x + width/2, data_b['Speed_m_s'], width, label=name_b, color=color_b, edgecolor='black')
-    ax1.set_ylabel('Speed (m/s)')
-    ax1.set_title('Average Cornering Speed (Higher is usually more efficient)')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(drone_ids)
-    ax1.legend()
-    ax1.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    # --- Subplot 2: Cumulative Jerk ---
-    rects2_a = ax2.bar(x - width/2, data_a['Jerk_m2_s5'], width, color=color_a, edgecolor='black')
-    rects2_b = ax2.bar(x + width/2, data_b['Jerk_m2_s5'], width, color=color_b, edgecolor='black')
-    ax2.set_ylabel('Jerk ($m^2/s^5$)')
-    ax2.set_title('Average Cumulative Jerk (Lower means less actuator wear)')
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(drone_ids)
-    ax2.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    # --- Subplot 3: Flight Time ---
-    rects3_a = ax3.bar(x - width/2, data_a['Flight_Time_s'], width, color=color_a, edgecolor='black')
-    rects3_b = ax3.bar(x + width/2, data_b['Flight_Time_s'], width, color=color_b, edgecolor='black')
-    ax3.set_ylabel('Time (s)')
-    ax3.set_title('Average Flight Time per Drone')
-    ax3.set_xticks(x)
-    ax3.set_xticklabels(drone_ids)
-    
-    # Dynamic Y-Limit to zoom in on the exact time range differences
-    min_time = min(data_a['Flight_Time_s'].min(), data_b['Flight_Time_s'].min())
-    max_time = max(data_a['Flight_Time_s'].max(), data_b['Flight_Time_s'].max())
-    padding = (max_time - min_time) * 0.5 if max_time != min_time else 5
-    ax3.set_ylim(max(0, min_time - padding), max_time + padding)
-    ax3.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    # --- Utility: Add Data Labels ---
-    def autolabel(rects, ax, format_str='{:.2f}'):
-        for rect in rects:
-            height = rect.get_height()
-            ax.annotate(format_str.format(height),
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
-                        xytext=(0, 3), 
-                        textcoords="offset points",
-                        ha='center', va='bottom', fontsize=9)
-
-    # Apply labels
-    autolabel(rects1_a, ax1)
-    autolabel(rects1_b, ax1)
-    autolabel(rects2_a, ax2, '{:.0f}')
-    autolabel(rects2_b, ax2, '{:.0f}')
-    autolabel(rects3_a, ax3)
-    autolabel(rects3_b, ax3)
-    
-    plt.tight_layout(rect=[0, 0, 1, 0.93])
-    plt.show()
-
 def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, metrics, global_cov):
     file_path = Path(filepath)
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -570,7 +453,7 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 "Map_Seed", "Overlap_Factor", "Algorithm", "Drone_ID", 
                 "Final_State", "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", 
                 "Energy_Joules", "Flight_Time_s", 
-                "Collisions", # <--- NEW COLUMN
+                "Collisions", 
                 "Coverage_pct"
             ])
             
@@ -582,6 +465,6 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 round(metrics["miss"][i], 4),
                 round(metrics["energy"][i], 2),
                 round(metrics["time"][i], 2),
-                metrics["collisions"][i],  # <--- NEW DATA
+                metrics["collisions"][i], 
                 round(global_cov, 2)
             ])

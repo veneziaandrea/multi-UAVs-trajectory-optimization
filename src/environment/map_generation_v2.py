@@ -58,7 +58,7 @@ class Map3D:
 
         rng = np.random.default_rng(seed)
 
-        # --- 1. Generate drone starting positions (come il tuo codice originale) ---
+        # Generate drone starting positions
         center = np.array([
             (x_bounds[0] + x_bounds[1]) / 2,
             (y_bounds[0] + y_bounds[1]) / 2
@@ -90,12 +90,12 @@ class Map3D:
 
         drone_starts = np.array(drone_starts)
 
-        # --- 2. Generate obstacles ---
+        # Generate obstacles 
         obstacles = []
         max_attempts = num_obstacles * 200
         attempts = 0
 
-        safety_distance = 0.5  # distanza minima dai droni
+        safety_distance = 0.5  # min distance from drones
 
         while len(obstacles) < num_obstacles and attempts < max_attempts:
             attempts += 1
@@ -110,14 +110,14 @@ class Map3D:
 
             overlap = False
 
-            # --- check overlap con altri ostacoli ---
+            # check overlap with other obstacles 
             for obs in obstacles:
                 dist = np.linalg.norm(new_obstacle.center_xy - obs.center_xy)
                 if dist < (new_obstacle.radius + obs.radius + 1.0):
                     overlap = True
                     break
 
-            # --- check distanza da drone starts ---
+            # check distance from drone starts
             if not overlap:
                 for ds in drone_starts:
                     dist = np.linalg.norm(new_obstacle.center_xy - ds)
