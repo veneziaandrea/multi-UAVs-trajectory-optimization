@@ -34,9 +34,9 @@ def plot_offline_csv_comparison(csv_filepath):
     width = 0.35
     
     # ---> UPGRADED TO 5 SUBPLOTS (Taller Figure) <---
-    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, figsize=(10, 20))
+    fig, (ax1, ax3, ax4) = plt.subplots(3, 1, figsize=(10, 20))
     
-    title_str = (f"Offline Trajectory Analysis: {name_a} vs {name_b} (Averaged across maps)\n"
+    title_str = (f"Offline Trajectory Analysis: {name_a} vs {name_b} (Averaged across 20 maps)\n"
                  f"Mean Coverage: {name_a} ({global_stats.get(name_a, 0):.2f}%) vs "
                  f"{name_b} ({global_stats.get(name_b, 0):.2f}%)")
     fig.suptitle(title_str, fontsize=14, fontweight='bold', y=0.97)
@@ -51,6 +51,7 @@ def plot_offline_csv_comparison(csv_filepath):
     ax1.set_xticks(x); ax1.set_xticklabels(drone_ids)
     ax1.legend(); ax1.grid(axis='y', linestyle='--', alpha=0.7)
     
+    '''
     # Subplot 2: Jerk
     rects2_a = ax2.bar(x - width/2, data_a['Jerk_m2_s5_mean'], width, yerr=data_a['Jerk_m2_s5_std'], capsize=5, color=color_a, edgecolor='black')
     rects2_b = ax2.bar(x + width/2, data_b['Jerk_m2_s5_mean'], width, yerr=data_b['Jerk_m2_s5_std'], capsize=5, color=color_b, edgecolor='black')
@@ -58,7 +59,7 @@ def plot_offline_csv_comparison(csv_filepath):
     ax2.set_title('Average Cumulative Jerk')
     ax2.set_xticks(x); ax2.set_xticklabels(drone_ids)
     ax2.grid(axis='y', linestyle='--', alpha=0.7)
-    
+    '''
     # Subplot 3: Energy
     rects3_a = ax3.bar(x - width/2, data_a['Energy_Joules_mean'], width, yerr=data_a['Energy_Joules_std'], capsize=5, color=color_a, edgecolor='black')
     rects3_b = ax3.bar(x + width/2, data_b['Energy_Joules_mean'], width, yerr=data_b['Energy_Joules_std'], capsize=5, color=color_b, edgecolor='black')
@@ -82,18 +83,19 @@ def plot_offline_csv_comparison(csv_filepath):
     ax4.set_ylim(max(0, min_time - padding), max_time + padding)
     ax4.grid(axis='y', linestyle='--', alpha=0.7)
 
-    # --- Subplot 5: Collisions (THE NEW METRIC) ---
+    '''
+    # --- Subplot 5: Collisions ---
     rects5_a = ax5.bar(x - width/2, data_a['Collisions_mean'], width, yerr=data_a['Collisions_std'], capsize=5, color=color_a, edgecolor='black')
     rects5_b = ax5.bar(x + width/2, data_b['Collisions_mean'], width, yerr=data_b['Collisions_std'], capsize=5, color=color_b, edgecolor='black')
     ax5.set_ylabel('Events')
-    ax5.set_title('Average Collision Events (Constraint Violations)')
+    ax5.set_title('Average Collision Events')
     ax5.set_xticks(x); ax5.set_xticklabels(drone_ids)
     
     # Add a slight padding to the Y-axis to prevent flat bars if collisions are 0
     max_col = max((data_a['Collisions_mean'] + data_a['Collisions_std']).max(), (data_b['Collisions_mean'] + data_b['Collisions_std']).max())
     ax5.set_ylim(0, max_col + 1 if max_col > 0 else 1)
     ax5.grid(axis='y', linestyle='--', alpha=0.7)
-
+    '''
     def autolabel(rects, std_data, ax, format_str='{:.2f}'):
         for rect, std in zip(rects, std_data):
             height = rect.get_height()
@@ -103,18 +105,22 @@ def plot_offline_csv_comparison(csv_filepath):
 
     autolabel(rects1_a, data_a['Speed_m_s_std'], ax1)
     autolabel(rects1_b, data_b['Speed_m_s_std'], ax1)
+    '''
     autolabel(rects2_a, data_a['Jerk_m2_s5_std'], ax2, '{:.0f}')
     autolabel(rects2_b, data_b['Jerk_m2_s5_std'], ax2, '{:.0f}')
+    '''
     autolabel(rects3_a, data_a['Energy_Joules_std'], ax3, '{:.0f}')
     autolabel(rects3_b, data_b['Energy_Joules_std'], ax3, '{:.0f}')
     autolabel(rects4_a, data_a['Flight_Time_s_std'], ax4, '{:.1f}')
     autolabel(rects4_b, data_b['Flight_Time_s_std'], ax4, '{:.1f}')
+    '''
     autolabel(rects5_a, data_a['Collisions_std'], ax5, '{:.1f}')
     autolabel(rects5_b, data_b['Collisions_std'], ax5, '{:.1f}')
+    '''
     
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
 if __name__ == "__main__":
-    filepath = "logs/switch_stats_40obs_distx2.csv"
+    filepath = "logs/def_overlap_0.1.csv"
     plot_offline_csv_comparison(filepath)

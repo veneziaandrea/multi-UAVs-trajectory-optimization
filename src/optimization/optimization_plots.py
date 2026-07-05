@@ -243,7 +243,7 @@ def plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones):
         
     # 3. Sovrapponi le Traiettorie dei Droni
     # Questo aiuta a capire PERCHÉ un'area è stata coperta o mancata
-    colors = ['blue', 'cyan', 'magenta', 'yellow', 'white']
+    colors = ['blue', 'cyan', 'magenta', 'yellow', 'black']
     for i, drone in enumerate(drones):
         if len(drone.history_p) > 0:
             traj = np.array(drone.history_p)

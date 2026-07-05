@@ -31,7 +31,7 @@ def spawn_swarm():
 
     fresh_drones = []
     for id_d in drone_ids:
-        # Use your existing Voronoi and TSP logic
+        # Drone creation and Voronoi cell and waypoints assignment and ordering
         current_cell = vor.Voronoi_Cells[id_d]
         partition_shape = Polygon(current_cell.polygon)
         waypoints_assigned = get_waypoints_in_partition(waypoints, partition_shape)
@@ -66,32 +66,32 @@ def build_demo(config):
         seed=seed,
     )
     print(f"Generated map with {len(map3d.obstacles)} obstacles and {len(drone_positions)} drone starting positions.")
-    print("Map bounds:", map3d.x_bounds, map3d.y_bounds, map3d.z_bounds)
-    print("Drone starting positions:")
-    for i, pos in enumerate(drone_positions):
-        print(f"  Drone {i+1}: {pos}")
+    #print("Map bounds:", map3d.x_bounds, map3d.y_bounds, map3d.z_bounds)
+    #print("Drone starting positions:")
+    #for i, pos in enumerate(drone_positions):
+    #    print(f"  Drone {i+1}: {pos}")
 
     # COMPUTATION OF AREA COVERED BY EACH CAMERA AND DEDUCTION OF K WAYPOINTS
-    # "FOV" is the diagonal FOV of the cameras (84° in this case)
+    # "FOV" is the diagonal FOV of the cameras
     FOV_rad = math.radians(uav_cfg["camera_FOV"])
     aspect_ratio = uav_cfg["camera_aspect_ratio"]
     config_path = CONFIGS / "optimization_params.json"
     opt_config = load_config(config_path)
-    h = opt_config["cost"]["z_ref"] # Distanza del drone dal livello 0 del terreno
+    h = opt_config["cost"]["z_ref"] # Distance of the drone from the terrain 
     overlap = opt_config["constraints"]["overlap_factor"] # Overlap factor to increase redundancy and ensure a better coverage
-    d = 2 * h * math.tan(FOV_rad/2) # Lunghezza diagonale dell'immagine delle camere
+    d = 2 * h * math.tan(FOV_rad/2) # Diagonal length of the cameras' images
 
-    W = d / math.sqrt(aspect_ratio**2 + 1) # Altezza immagine
-    L = W * aspect_ratio # Largehzza immagine
+    W = d / math.sqrt(aspect_ratio**2 + 1) # Image height
+    L = W * aspect_ratio # Image width
 
     A_FOV = L * W # Area covered by each camera
     A_map = map3d.x_bounds[1] * map3d.y_bounds[1] # Total map area
-    k = math.ceil(A_map/(A_FOV*(1 - overlap)))
+    k = math.ceil(A_map/(A_FOV*(1 - overlap))) # number of waypoints
 
-    print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
-    print(f"Map area = {A_map} m^2")
-    print(f"FOV area = {A_FOV} m^2")
-    print(f"k = {k}")
+    # print(f"Output image dimensions: {L} meters of width and {W} meters of height.")
+    # print(f"Map area = {A_map} m^2")
+    # print(f"FOV area = {A_FOV} m^2")
+    print(f"Number of waypoints k = {k}")
 
     waypoints = kmeans_clustering(
             map3d.free_space,
@@ -99,11 +99,11 @@ def build_demo(config):
             seed=seed,
         )   
 
-    # 2. Pulizia Waypoint (Margine super safe di prova: safe_distance del JSON + 0.5m)
+    # Remove the waypoints too close to the obstacles (Margin = safe_distance from the JSON configuration file + 0.5m)
     safe_margin = opt_config["constraints"]["safe_distance"] + 0.5
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
-    # --- Voronoi Partition --- 
+    # Voronoi Partition 
     print("Computing Voronoi partition for the generated map and drone starting positions...")
     seeds_xy = kmeans_clustering(
         map3d.free_space,
@@ -112,9 +112,9 @@ def build_demo(config):
         waypoints=waypoints
     )
 
-    print("Voronoi seeds from k-means on free space:")
-    for i, seed_xy in enumerate(seeds_xy):
-        print(f"  Seed {i+1}: {seed_xy}")
+    # print("Voronoi seeds from k-means on free space:")
+    # for i, seed_xy in enumerate(seeds_xy):
+    #    print(f"  Seed {i+1}: {seed_xy}")
 
     vor = Voronoi_Partition.build(
         cells=None,  # cells will be computed inside the build method
@@ -130,11 +130,10 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "switch_stats_40obs_def.csv"
+    csv_filepath = ROOT / "logs" / "def_overlap_0.1.csv"
 
     seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
-    # seed_list = [3]
-    # seed_list = [25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
+    # seed_list = [7]
     
     for test_seed in seed_list:
         # Set random seed for reproducibility
@@ -177,6 +176,7 @@ if __name__ == "__main__":
         dt = mpc_cfg["timestep"]
         max_iter = mpc_cfg["max_iter"]
         current_overlap = opt_config["constraints"]["overlap_factor"]
+        safety_radius = opt_config["constraints"]["safe_distance"]
 
         # --- INITIALIZATION ---
         drones = []
@@ -208,7 +208,6 @@ if __name__ == "__main__":
         normal_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
         drone_labels = []
         mass = 1.0 # kg
-        safety_radius = 0.5 # non avevo voglia di prenderlo dal json
 
         for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
@@ -401,6 +400,7 @@ if __name__ == "__main__":
         
         early_time = max(early_metrics["time"])
         normal_time = max(normal_metrics["time"])
+        
         '''
         plot_algorithm_comparison(
             drone_ids=drone_labels,
@@ -413,9 +413,7 @@ if __name__ == "__main__":
             globals_b={"time": normal_time, "coverage": normal_cov}
         )
         '''
-
-    # plot_offline_csv_comparison(csv_filepath)
-      
+   
     # (Optional: Show the 3D map or animation for the Early Switching run)
     plot_results(drones_early, map3d.obstacles)
 
@@ -426,6 +424,7 @@ if __name__ == "__main__":
 
     res = 0.2 # Resolution
     final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
+    plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones_early)
     print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
-    print(f"Early Switch Average solve time: {early_avg_solve_time} ms")
-    print(f"Normal Switch Average solve time: {avg_solve_time} ms")
+    print(f"Early Switch Average solve time: {early_avg_solve_time} s")
+    print(f"Normal Switch Average solve time: {avg_solve_time} s")
