@@ -130,10 +130,14 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-    csv_filepath = ROOT / "logs" / "def_overlap_0.1.csv"
 
-    seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
-    # seed_list = [7]
+    # TO BE CHANGED BEFORE RUNNING THE SCRIPT
+    # logs file filename, if not existing the script will create one with such name
+    csv_filepath = ROOT / "logs" / "random_try_def.csv"
+
+    # choose on how many maps do you want to simulate the optimization problem
+    # seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
+    seed_list = [76]
     
     for test_seed in seed_list:
         # Set random seed for reproducibility
@@ -142,7 +146,7 @@ if __name__ == "__main__":
         seed_everything(test_seed)
         # Build the demo environment and get initial drone positions
         L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
-        '''
+        
         # Visualize the Voronoi partition together with obstacles and initial drone positions
         plot_voronoi_partition(
             map3d,
@@ -151,24 +155,25 @@ if __name__ == "__main__":
             waypoints=waypoints,
             title="Voronoi Partition of the Workspace",
         )
-        '''
-
+        
         # Extract 3D coordinates (x, y, and half the height for the z-center)
         obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
         # Create an array of radii to match the order of the tree
         obs_radii = np.array([obs.radius for obs in map3d.obstacles])
-        # Create obstacles object in a way that is actually fast to use 
+
+        # Transform obstacles objects in a structure that is actually fast to use for obstacle, drones avoidance and next waypoints search
         obs_tree = KDTree(obstacle_coords)
         obstacles = map3d.obstacles
 
         wp_tree = KDTree(waypoints)
 
         # SETUP MPC
-        # Imposta ogni quante iterazioni vuoi vedere il report
+        # After how many iterations a recap of the current situation is shown
         PRINT_INTERVAL = 10
+        # number of other drones apart from the one which is running the algorithm
         num_neighbors = len(drone_positions) - 1
 
-        # take the prediction horizon and time interval from config file
+        # take the parameters from config file
         config_path = ROOT / "configs" / "optimization_params.json"
         opt_config = load_config(config_path)
         mpc_cfg = opt_config["mpc"]
@@ -178,7 +183,7 @@ if __name__ == "__main__":
         current_overlap = opt_config["constraints"]["overlap_factor"]
         safety_radius = opt_config["constraints"]["safe_distance"]
 
-        # --- INITIALIZATION ---
+        # INITIALIZATION 
         drones = []
         drone_ids = [0] * len(drone_positions)
         for i in range(len(drone_positions)):
@@ -187,16 +192,16 @@ if __name__ == "__main__":
         # assign the waypoints to the associated drone
         assign_area(vor, drone_positions)
 
-        # Add the 'seen' column to the global waypoints matrix ---
-        # If waypoints is [N x 2], this makes it [N x 3]
+        # Add the 'seen' flag column to the global waypoints matrix
         if waypoints.shape[1] == 2:
             seen_column = np.zeros((waypoints.shape[0], 1)) # Create column of 0s
             waypoints = np.hstack((waypoints, seen_column)) # Attach it
 
-        # --- MAIN MPC LOOP ---
-        dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' [m]
-        ego_accel_prev = 0
-        t_solve_avg = 0
+        # MAIN MPC LOOP
+        # initialization of the run without early switching for a posteriori comparison
+        dist_threshold = 0.5 # Distance to mark a waypoint as 'seen' -> flag switched to 1 [m]
+        ego_accel_prev = 0 # previous acceleration (input) of the drone
+        t_solve_avg = 0 # average solve time of the problem
         early_swtiching_flag = False
         
         drones_normal = spawn_swarm()
@@ -209,13 +214,14 @@ if __name__ == "__main__":
         drone_labels = []
         mass = 1.0 # kg
 
+        # create logs
         for drone in drones_normal:
             report = evaluate_trajectory_performance(drone, dt)
             normal_metrics["speed"].append(report["avg_cornering_speed"])
             normal_metrics["jerk"].append(report["jerk"])
             normal_metrics["miss"].append(report["avg_miss_distance"])
 
-            # ---> 2. EXACT TIME & ENERGY CALCULATION <---
+            # EXACT TIME & ENERGY CALCULATION
             v_mag = np.linalg.norm(drone.history_v, axis=1)
             a_mag = np.linalg.norm(drone.history_a, axis=1)
             
@@ -224,17 +230,16 @@ if __name__ == "__main__":
                 active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1 if np.any(v_mag > 1e-5) else 0
                 drone_time = active_steps * dt
                 
-                # ---> THE CORRECTED ENERGY MATH <---
-                # 1. Get the 3D acceleration vectors for the active flight time
+                # Get the 3D acceleration vectors for the active flight time
                 active_a_3d = np.array(drone.history_a[:active_steps], dtype=float)
                 
-                # 2. Add Gravity (9.81 m/s^2) to the Z-axis to get true motor thrust requirement
+                # Add gravity to the Z-axis 
                 active_a_3d[:, 2] += 9.81 
                 
-                # 3. Calculate total thrust magnitude: || T || = m * || a + g ||
+                # Calculate total thrust magnitude
                 thrust_mag = mass * np.linalg.norm(active_a_3d, axis=1)
                 
-                # 4. Integrate Squared Thrust over time (Standard MPC Energy Proxy)
+                # 4. Integrate squared thrust over time (Energy Proxy)
                 drone_energy = np.sum(thrust_mag**2) * dt
                 
             else:
@@ -247,18 +252,18 @@ if __name__ == "__main__":
                 thrust_mag = mass * np.linalg.norm(a_3d, axis=1)
                 drone_energy = np.sum(thrust_mag**2) * dt
             
-            # ---> 2. KD-TREE DISCRETE COLLISION COUNTER <---
+            # KD-TREE DISCRETE COLLISION COUNTER
             collision_events = 0
             in_collision = False
             
-            # Find the max radius once so the KD-Tree knows how wide to cast its net
-            max_search_radius = np.max(obs_radii) + safety_radius
+            # Find the max radius so the KD-Tree knows how wide to cast its net
+            max_search_radius = np.max(obs_radii)
             
             for p in drone.history_p:
                 step_collision = False
                 
                 # Ask the KD-Tree for the indices of obstacles that are strictly nearby
-                # (p is your [x,y,z] coordinate from the history)
+                # (p is the [x,y,z] coordinate from the history)
                 nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
                 
                 # Only loop through the 1 or 2 obstacles the tree found
@@ -296,9 +301,9 @@ if __name__ == "__main__":
         # ==========================================
         # RUN 2: EARLY SWITCHING
         # ==========================================
-        print("\n" + "="*50)
+        # print("\n" + "="*50)
         print(" STARTING RUN 2: EARLY SWITCHING")
-        print("="*50)
+        # print("="*50)
 
         early_swtiching_flag = True
         
@@ -307,7 +312,7 @@ if __name__ == "__main__":
             drones_early, dt, max_iter, opt_config, map3d.obstacles, obs_tree, dist_threshold, early_swtiching_flag, PRINT_INTERVAL
         )
         
-        # Extract Early Metrics
+        # Extract early metrics
         early_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
         drone_labels = []
         for drone in drones_early:
@@ -316,7 +321,7 @@ if __name__ == "__main__":
             early_metrics["jerk"].append(report["jerk"])
             early_metrics["miss"].append(report["avg_miss_distance"])
             
-            # ---> 2. EXACT TIME & ENERGY CALCULATION <---
+            # TIME & ENERGY CALCULATION
             v_mag = np.linalg.norm(drone.history_v, axis=1)
             a_mag = np.linalg.norm(drone.history_a, axis=1)
             
@@ -325,17 +330,16 @@ if __name__ == "__main__":
                 active_steps = np.max(np.nonzero(v_mag > 1e-5)) + 1 if np.any(v_mag > 1e-5) else 0
                 drone_time = active_steps * dt
                 
-                # ---> THE CORRECTED ENERGY MATH <---
-                # 1. Get the 3D acceleration vectors for the active flight time
+                # Get the 3D acceleration vectors for the active flight time
                 active_a_3d = np.array(drone.history_a, float)
                 
-                # 2. Add Gravity (9.81 m/s^2) to the Z-axis to get true motor thrust requirement
+                # Add gravity to the Z-axis
                 active_a_3d[:, 2] += 9.81 
                 
-                # 3. Calculate total thrust magnitude: || T || = m * || a + g ||
+                # Calculate total thrust magnitude: 
                 thrust_mag = mass * np.linalg.norm(active_a_3d, axis=1)
                 
-                # 4. Integrate Squared Thrust over time (Standard MPC Energy Proxy)
+                # Integrate squared thrust over time (Energy Proxy)
                 drone_energy = np.sum(thrust_mag**2) * dt
                 
             else:
@@ -348,18 +352,18 @@ if __name__ == "__main__":
                 thrust_mag = mass * np.linalg.norm(a_3d, axis=1)
                 drone_energy = np.sum(thrust_mag**2) * dt
 
-            # ---> 2. KD-TREE DISCRETE COLLISION COUNTER <---
+            # KD-TREE DISCRETE COLLISION COUNTER
             collision_events = 0
             in_collision = False
             
-            # Find the max radius once so the KD-Tree knows how wide to cast its net
-            max_search_radius = np.max(obs_radii) + safety_radius
+            # Find the max radius so the KD-Tree knows how wide to cast its net
+            max_search_radius = np.max(obs_radii) 
             
             for p in drone.history_p:
                 step_collision = False
                 
                 # Ask the KD-Tree for the indices of obstacles that are strictly nearby
-                # (p is your [x,y,z] coordinate from the history)
+                # (p is [x,y,z] coordinate from the history)
                 nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
                 
                 # Only loop through the 1 or 2 obstacles the tree found
@@ -393,9 +397,7 @@ if __name__ == "__main__":
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
                             drone_labels, early_metrics, early_cov)
 
-        # ==========================================
-        # PHASE 3: AUTOMATED COMPARISON PLOT
-        # ==========================================
+        #  COMPARISON PLOT
         # print("\nGenerating Final Performance Comparison...")
         
         early_time = max(early_metrics["time"])
@@ -414,10 +416,10 @@ if __name__ == "__main__":
         )
         '''
    
-    # (Optional: Show the 3D map or animation for the Early Switching run)
+    # Show the 3D map or animation for the Early Switching run
     plot_results(drones_early, map3d.obstacles)
 
-    # Plot the apllied inputs and velocities
+    # Plot the applied inputs and velocities
     plot_kinematics(drones_early, dt)
 
     animate_simulation(drones_early, map3d.obstacles, map_limits)
