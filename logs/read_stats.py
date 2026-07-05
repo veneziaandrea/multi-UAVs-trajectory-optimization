@@ -21,7 +21,7 @@ def plot_offline_csv_comparison(csv_filepath):
     global_df = df_success[['Map_Seed', 'Algorithm', 'Coverage_pct']].drop_duplicates()
     global_stats = global_df.groupby('Algorithm')['Coverage_pct'].mean().to_dict()
     
-    # ---> ADD COLLISIONS TO GROUPBY <---
+    # ADD COLLISIONS 
     drone_stats = df_success.groupby(['Algorithm', 'Drone_ID'])[['Speed_m_s', 'Jerk_m2_s5', 'Energy_Joules', 'Flight_Time_s', 'Collisions']].agg(['mean', 'std']).reset_index()
     
     drone_stats.columns = ['_'.join(col).strip('_') if col[1] else col[0] for col in drone_stats.columns.values]
@@ -33,10 +33,9 @@ def plot_offline_csv_comparison(csv_filepath):
     x = np.arange(len(drone_ids))
     width = 0.35
     
-    # ---> UPGRADED TO 5 SUBPLOTS (Taller Figure) <---
     fig, (ax1, ax3, ax4) = plt.subplots(3, 1, figsize=(10, 20))
     
-    title_str = (f"Offline Trajectory Analysis: {name_a} vs {name_b} (Averaged across 20 maps)\n"
+    title_str = (f"Offline Trajectory Analysis: {name_a} vs {name_b}\n"
                  f"Mean Coverage: {name_a} ({global_stats.get(name_a, 0):.2f}%) vs "
                  f"{name_b} ({global_stats.get(name_b, 0):.2f}%)")
     fig.suptitle(title_str, fontsize=14, fontweight='bold', y=0.97)
@@ -69,6 +68,7 @@ def plot_offline_csv_comparison(csv_filepath):
     ax3.grid(axis='y', linestyle='--', alpha=0.7)
     
     # Subplot 4: Time
+    # Subplot 4: Time
     rects4_a = ax4.bar(x - width/2, data_a['Flight_Time_s_mean'], width, yerr=data_a['Flight_Time_s_std'], capsize=5, color=color_a, edgecolor='black')
     rects4_b = ax4.bar(x + width/2, data_b['Flight_Time_s_mean'], width, yerr=data_b['Flight_Time_s_std'], capsize=5, color=color_b, edgecolor='black')
     ax4.set_ylabel('Time (s)')
@@ -76,9 +76,16 @@ def plot_offline_csv_comparison(csv_filepath):
     ax4.set_xticks(x); ax4.set_xticklabels(drone_ids)
     
     min_time = min(data_a['Flight_Time_s_mean'].min(), data_b['Flight_Time_s_mean'].min())
-    max_time_a = (data_a['Flight_Time_s_mean'] + data_a['Flight_Time_s_std']).max()
-    max_time_b = (data_b['Flight_Time_s_mean'] + data_b['Flight_Time_s_std']).max()
+    
+    # Use fillna(0) to prevent NaN propagation if a drone lacks enough runs for a valid standard deviation
+    max_time_a = (data_a['Flight_Time_s_mean'] + data_a['Flight_Time_s_std'].fillna(0)).max()
+    max_time_b = (data_b['Flight_Time_s_mean'] + data_b['Flight_Time_s_std'].fillna(0)).max()
     max_time = max(max_time_a, max_time_b)
+    
+    # Fallback to prevent matplotlib crashes if a dataset is completely empty/NaN
+    if pd.isna(min_time) or pd.isna(max_time):
+        min_time, max_time = 0, 10
+        
     padding = (max_time - min_time) * 0.5 if max_time != min_time else 5
     ax4.set_ylim(max(0, min_time - padding), max_time + padding)
     ax4.grid(axis='y', linestyle='--', alpha=0.7)
@@ -122,5 +129,5 @@ def plot_offline_csv_comparison(csv_filepath):
     plt.show()
 
 if __name__ == "__main__":
-    filepath = "logs/def_overlap_0.1.csv"
+    filepath = "logs/random_try_def.csv"
     plot_offline_csv_comparison(filepath)

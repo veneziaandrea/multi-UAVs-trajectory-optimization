@@ -17,6 +17,7 @@ CONFIGS = ROOT / "configs"
 
 from config import load_config, seed_everything
 from environment.map_generation_v2 import Map3D
+from logs.read_stats import plot_offline_csv_comparison 
 from utils.plot_initial_envronment import plot_initial_environment
 from utils.kmeans import kmeans_clustering, sanitize_waypoints
 from utils.plot_voronoi import plot_voronoi_partition
@@ -99,8 +100,8 @@ def build_demo(config):
             seed=seed,
         )   
 
-    # Remove the waypoints too close to the obstacles (Margin = safe_distance from the JSON configuration file + 0.5m)
-    safe_margin = opt_config["constraints"]["safe_distance"] + 0.5
+    # Remove the waypoints too close to the obstacles (Margin = safe_distance from the JSON configuration file + increase of choice [m])
+    safe_margin = opt_config["constraints"]["safe_distance"] + 0.25
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # Voronoi Partition 
@@ -427,6 +428,7 @@ if __name__ == "__main__":
     res = 0.2 # Resolution
     final_coverage_pct, coverage_grid = calculate_final_coverage(drones_early, map_limits, L, W, res)
     plot_coverage_map(coverage_grid, map_limits, res, obstacles, drones_early)
+    plot_offline_csv_comparison(csv_filepath)
     print(f"Final Map Coverage: {final_coverage_pct:.2f}%")
     print(f"Early Switch Average solve time: {early_avg_solve_time} s")
     print(f"Normal Switch Average solve time: {avg_solve_time} s")
