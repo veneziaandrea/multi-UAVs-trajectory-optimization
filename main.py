@@ -101,7 +101,7 @@ def build_demo(config):
         )   
 
     # Remove the waypoints too close to the obstacles (Margin = safe_distance from the JSON configuration file + increase of choice [m])
-    safe_margin = opt_config["constraints"]["safe_distance"] + 0.25
+    safe_margin = opt_config["constraints"]["safe_distance"] + 0.5
     waypoints = sanitize_waypoints(waypoints, map3d.obstacles, safety_margin=safe_margin)
 
     # Voronoi Partition 
@@ -394,12 +394,11 @@ if __name__ == "__main__":
         res = 0.2
         early_cov, _ = calculate_final_coverage(drones_early, map_limits, L, W, res)
         
-        # Save (notice global_time is removed from the arguments)
+        # Save logs to csv
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
                             drone_labels, early_metrics, early_cov)
 
         #  COMPARISON PLOT
-        # print("\nGenerating Final Performance Comparison...")
         
         early_time = max(early_metrics["time"])
         normal_time = max(normal_metrics["time"])

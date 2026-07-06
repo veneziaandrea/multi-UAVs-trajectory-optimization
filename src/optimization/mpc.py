@@ -6,6 +6,7 @@ from scipy.spatial import KDTree
 from pathlib import Path
 import os
 import time
+import numpy as np
 
 # This forces Python to look specifically in your site-packages for the DLLs
 try:
@@ -46,6 +47,7 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
     Default values are a simplified MPC setup for debugging a single drone,
     enable_obstacles=False sets a completely empty environment.
     Pass as arguments the actual variables to solve the real problem.
+    The formulated problem is convex apart from the barrier function.
     """
     cost_cfg = config["cost"]
     constraints_cfg = config["constraints"]
@@ -76,8 +78,7 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
 
     # Variables 
     p = opti.variable(3, N+1)  
-    v = opti.variable(3, N+1)  
-    B = opti.variable(1, N+1)  
+    v = opti.variable(3, N+1) 
     a = opti.variable(3, N)    
     eps_obs = opti.variable(k_obs, N+1)
     eps_neigh = opti.variable(num_neighbors, N+1) 
@@ -86,7 +87,8 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
     opti.set_initial(eps_neigh, 0.01)
 
     # Parameters 
-    p_init = opti.parameter(3) 
+    noise_flag = 1 # set to zero to simulate nominal conditions
+    p_init = opti.parameter(3) + np.random.uniform(low = -0.1, high = 0.1, size = 3) * noise_flag
     v_init = opti.parameter(3)
     B_init = opti.parameter(1)
     
@@ -177,7 +179,8 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 
                 # DYNAMIC RADII MATH 
                 # Extract the specific radius for this obstacle at this timestep
-                current_obs_radius = r_obs_closest[col_idx]
+                noise_flag = 0 # set to zero to simulate in nominal simulation conditions where the radius of the obstacle is perfectly known
+                current_obs_radius = r_obs_closest[col_idx] + np.random.uniform(low = -0.25, high= 0.25, size = 1) * noise_flag
                 
                 total_safe_dist = safe_rad + current_obs_radius
                 
@@ -846,7 +849,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
         
         # Check if ALL drones have finished their tasks
         if all(d.is_parked for d in drones):
-            print(f"\nMission accomplished in {num_iter} steps!")
+            print(f"\nMission accomplished in {num_iter} steps")
             break
 
         for i, drone in enumerate(drones):
@@ -854,7 +857,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
             # MISSION STATE CHECK 
             unseen_mask = drone.waypoints[:, 2] == 0
             if not np.any(unseen_mask) and not drone.returning_home:
-                print(f"Drone {drone.id} finished mission! Returning home.")
+                print(f"Drone {drone.id} returning home.")
                 home_wp = np.array([drone.home_pos[0], drone.home_pos[1], 0])
                 drone.waypoints = np.vstack([drone.waypoints, home_wp])
                 drone.returning_home = True
@@ -878,7 +881,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
                 
                 # Check if the very last waypoint (the home waypoint) has been marked as seen (1)
                 if drone.waypoints[-1, 2] == 1:
-                    print(f"Drone {drone.id} has parked safely!")
+                    print(f"Drone {drone.id} returned")
                     drone.is_parked = True
 
             if drone.is_parked:

@@ -417,7 +417,11 @@ def evaluate_trajectory_performance(drone, dt):
     
     # Evaluate mission time
     total_flight_time = len(p_arr) * dt
-    
+
+    avg_miss = np.mean(miss_distances)
+    avg_speed = np.mean(cornering_speeds)
+
+    '''
     # --- PRINT REPORT ---
     print(f"\n=== FLIGHT DYNAMICS REPORT (Drone {drone.id}) ===")
     print(f"Total Flight Time:      {total_flight_time:.2f} seconds")
@@ -427,12 +431,11 @@ def evaluate_trajectory_performance(drone, dt):
     for i in range(len(cornering_speeds)):
         print(f"  WP {i+1}: Missed Center by {miss_distances[i]:.2f}m | Cornering Speed: {cornering_speeds[i]:.2f} m/s")
         
-    avg_miss = np.mean(miss_distances)
-    avg_speed = np.mean(cornering_speeds)
     print("-" * 40)
     print(f"AVERAGE MISS DISTANCE:  {avg_miss:.2f} meters")
     print(f"AVERAGE CORNERING SPD:  {avg_speed:.2f} m/s")
-    
+    '''
+
     return {
         "time": total_flight_time,
         "jerk": total_jerk_effort,
