@@ -134,11 +134,11 @@ if __name__ == "__main__":
 
     # TO BE CHANGED BEFORE RUNNING THE SCRIPT
     # logs file filename, if not existing the script will create one with such name
-    csv_filepath = ROOT / "logs" / "position_noise_20cm.csv"
+    csv_filepath = ROOT / "logs" / "seed_69_noise30.csv"
 
     # choose on how many maps do you want to simulate the optimization problem
-    seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62, 76, 48, 82, 26, 64]
-    # seed_list = [76]
+    # seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62, 76, 48, 82, 26, 64]
+    seed_list = [69]
     
     for test_seed in seed_list:
         # Set random seed for reproducibility

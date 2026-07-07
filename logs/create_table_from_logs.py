@@ -1,7 +1,12 @@
 import pandas as pd
 
+'''
+Produces latex code in terminal to be copied and pasted.
+Requires Jinja2 package to be installed with pip.
+'''
+
 # 1. Load the data 
-df = pd.read_csv('logs/position_noise_20cm.csv')
+df = pd.read_csv('logs/position_noise_30cm.csv')
 df.columns = df.columns.str.strip()
 
 df['Final_State'] = df['Final_State'].str.strip() # Strip accidental spaces
