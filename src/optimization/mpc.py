@@ -87,8 +87,7 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
     opti.set_initial(eps_neigh, 0.01)
 
     # Parameters 
-    noise_flag = 1 # set to zero to simulate nominal conditions
-    p_init = opti.parameter(3) + np.random.uniform(low = -0.1, high = 0.1, size = 3) * noise_flag
+    p_init = opti.parameter(3)
     v_init = opti.parameter(3)
     B_init = opti.parameter(1)
     
@@ -179,8 +178,7 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 
                 # DYNAMIC RADII MATH 
                 # Extract the specific radius for this obstacle at this timestep
-                noise_flag = 0 # set to zero to simulate in nominal simulation conditions where the radius of the obstacle is perfectly known
-                current_obs_radius = r_obs_closest[col_idx] + np.random.uniform(low = -0.25, high= 0.25, size = 1) * noise_flag
+                current_obs_radius = r_obs_closest[col_idx] 
                 
                 total_safe_dist = safe_rad + current_obs_radius
                 
@@ -203,13 +201,19 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
                 
         # Add to total cost
         cost += slack_term
-        cost += step_barrier
+        #cost += step_barrier
         cost_components["slack"] += slack_term
-        cost_components["barrier"] += step_barrier
+        # cost_components["barrier"] += step_barrier
         
     else:
         cost += 1e-8 * ca.sumsqr(eps_obs)
-                
+    
+    '''
+    cost += 1e-8 * ca.sumsqr(p)
+    cost += 1e-8 * ca.sumsqr(v)
+    cost += 1e-8 * ca.sumsqr(a)
+    '''
+
     opti.minimize(cost)
 
     # CONSTRAINTS
@@ -236,6 +240,7 @@ def setup_MPC_QP(num_neighbors=0, enable_obstacles=False):
             for k in range(1, N+1):
                 col_idx = j * (N+1) + k
                 dp_bar = p_ego_prev[:, k] - p_neighbors[:, col_idx]
+                # dp_bar += 1e-6
                 dist_bar_sqr = ca.sumsqr(dp_bar)
                 linear_term = 2 * ca.dot(dp_bar, (p[:, k] - p_ego_prev[:, k]))
                 
@@ -758,11 +763,12 @@ def run_mpc_iteration(mpc_vars, current_state, waypoint_coords,
             closest_obs_coords[:, col_idx] = obs_tree.data[obs_idx]
             
             # Extract the actual radius from the global obstacles list
-            r_obs_closest_array[col_idx] = obstacles[obs_idx].radius 
+            r_obs_closest_array[col_idx] = obstacles[obs_idx].radius
 
+    p_init = current_state["p"] 
 
     # SET OPTI PARAMETERS 
-    opti.set_value(mpc_vars["p_init"], current_state["p"])
+    opti.set_value(mpc_vars["p_init"], p_init)
     opti.set_value(mpc_vars["v_init"], current_state["v"])
     opti.set_value(mpc_vars["B_init"], current_state["B"])
     
@@ -878,6 +884,7 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
                     current_focus_vector[0] = 1.0
         
             if drone.returning_home and not drone.is_parked:
+
                 
                 # Check if the very last waypoint (the home waypoint) has been marked as seen (1)
                 if drone.waypoints[-1, 2] == 1:
@@ -908,8 +915,35 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
 
             current_w_seen = config["cost"]["w_seen_rth"] if drone.returning_home else config["cost"]["w_seen"]
 
+            # simulate noise on the position
+            estimated_state = {
+                "p": drone.state["p"].copy(),
+                "v": drone.state["v"].copy(),
+                "a": drone.state["a"].copy(),
+                "B": drone.state.get("B", 1.0)
+            }
+            
+            noise_flag = 1 # set to 0 if nominal conditions
+            # Simulate GNSS/Sensor Fusion drift (~0.3m standard deviation)
+            state_noise = np.random.normal(loc=0.0, scale=0.2, size=3) * noise_flag
+
+            noisy_p = drone.state["p"] + state_noise
+            
+            # CLAMP NOISE TO CONSTRAINTS 
+            # To avoid breaking the solver because the drone goes outside the mathematical map boundaries
+            x_min, x_max = bounds_cfg["x_bounds"]
+            y_min, y_max = bounds_cfg["y_bounds"]
+            z_max = bounds_cfg["z_bounds"][1]
+            
+            noisy_p[0] = np.clip(noisy_p[0], x_min, x_max)
+            noisy_p[1] = np.clip(noisy_p[1], y_min, y_max)
+            # Clip the floor to the exact same constraint used in your MPC (-0.1)
+            noisy_p[2] = np.clip(noisy_p[2], -0.1, z_max) 
+            
+            estimated_state["p"] = noisy_p
+
             accel, new_traj, current_cost_value, cost_breakdown, t_solve_mpc = run_mpc_iteration(
-                drone.mpc_vars, drone.state, drone.waypoints, 
+                drone.mpc_vars, estimated_state, drone.waypoints, 
                 drone.last_traj, neighbor_trajs_array, obs_tree, obstacles, 
                 current_w_seen, current_focus_vector
             )
@@ -927,6 +961,8 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
 
             drone.drone_model(accel, dt)
             if early_switch_flag == False:
+                drone.check_waypoints(dist_threshold)
+            elif early_switch_flag == True  and drone.returning_home == True :
                 drone.check_waypoints(dist_threshold)
             else : 
                 drone.check_waypoints(switch_distance)

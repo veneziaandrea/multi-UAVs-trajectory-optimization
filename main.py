@@ -134,11 +134,11 @@ if __name__ == "__main__":
 
     # TO BE CHANGED BEFORE RUNNING THE SCRIPT
     # logs file filename, if not existing the script will create one with such name
-    csv_filepath = ROOT / "logs" / "random_try_def.csv"
+    csv_filepath = ROOT / "logs" / "position_noise_20cm.csv"
 
     # choose on how many maps do you want to simulate the optimization problem
-    # seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62]
-    seed_list = [76]
+    seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62, 76, 48, 82, 26, 64]
+    # seed_list = [76]
     
     for test_seed in seed_list:
         # Set random seed for reproducibility
@@ -148,6 +148,7 @@ if __name__ == "__main__":
         # Build the demo environment and get initial drone positions
         L, W, map3d, vor, drone_positions, waypoints = build_demo(config)
         
+        '''
         # Visualize the Voronoi partition together with obstacles and initial drone positions
         plot_voronoi_partition(
             map3d,
@@ -156,7 +157,8 @@ if __name__ == "__main__":
             waypoints=waypoints,
             title="Voronoi Partition of the Workspace",
         )
-        
+        '''
+
         # Extract 3D coordinates (x, y, and half the height for the z-center)
         obstacle_coords = np.array([[obs.x, obs.y, obs.height / 2.0] for obs in map3d.obstacles])
         # Create an array of radii to match the order of the tree
@@ -398,8 +400,7 @@ if __name__ == "__main__":
         save_metrics_to_csv(csv_filepath, test_seed, current_overlap, "Early", 
                             drone_labels, early_metrics, early_cov)
 
-        #  COMPARISON PLOT
-        
+        # find time of mission completion        
         early_time = max(early_metrics["time"])
         normal_time = max(normal_metrics["time"])
         
