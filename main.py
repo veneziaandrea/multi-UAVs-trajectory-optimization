@@ -213,7 +213,7 @@ if __name__ == "__main__":
         )
         
         # Extract Normal Metrics
-        normal_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
+        normal_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": [], "solve_time": []}
         drone_labels = []
         mass = 1.0 # kg
 
@@ -291,6 +291,7 @@ if __name__ == "__main__":
             normal_metrics["time"].append(drone_time) 
             normal_metrics["energy"].append(drone_energy) 
             normal_metrics["collisions"].append(collision_events)
+            normal_metrics["solve_time"].append(avg_solve_time)
             drone_labels.append(f"Drone {drone.id}")
 
         # Calculate global coverage 
@@ -316,7 +317,7 @@ if __name__ == "__main__":
         )
         
         # Extract early metrics
-        early_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": []}
+        early_metrics = {"speed": [], "jerk": [], "energy": [], "miss": [], "state": [], "time": [], "collisions": [], "solve_time": []}
         drone_labels = []
         for drone in drones_early:
             report = evaluate_trajectory_performance(drone, dt)
@@ -390,6 +391,7 @@ if __name__ == "__main__":
             early_metrics["time"].append(drone_time) 
             early_metrics["energy"].append(drone_energy)
             early_metrics["collisions"].append(collision_events) 
+            early_metrics["solve_time"].append(early_avg_solve_time)
             drone_labels.append(f"Drone {drone.id}")
             
         # Calculate global coverage 

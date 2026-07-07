@@ -391,19 +391,20 @@ def evaluate_trajectory_performance(drone, dt):
     
     # EVALUATE WAYPOINTS (Cornering Speed & Miss Distance)
     for i in range(mission_wps.shape[0]):
-        target_wp = mission_wps[i, :3]
+        # Extract only the X and Y coordinates
+        target_wp_2d = mission_wps[i, :2] 
         
-        # Calculate distance from drone to this waypoint at every timestep
-        distances = np.linalg.norm(p_arr - target_wp, axis=1)
+        # Calculate 2D distance from drone to this waypoint at every timestep
+        distances_2d = np.linalg.norm(p_arr[:, :2] - target_wp_2d, axis=1)
         
-        # Find the timestep where the drone was closest to the waypoint
-        idx_closest = np.argmin(distances)
+        # Find the timestep where the drone was closest to the waypoint in 2D
+        idx_closest = np.argmin(distances_2d)
         
-        # Record the Miss Distance
-        min_dist = distances[idx_closest]
+        # Record the Miss Distance (Now accurately reflects the 1m switch threshold)
+        min_dist = distances_2d[idx_closest]
         miss_distances.append(min_dist)
         
-        # Record the Cornering Speed
+        # Record the Cornering Speed (Velocity remains 3D as it includes altitude adjustments)
         speed_at_wp = np.linalg.norm(v_arr[idx_closest])
         cornering_speeds.append(speed_at_wp)
 
@@ -456,8 +457,7 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 "Map_Seed", "Overlap_Factor", "Algorithm", "Drone_ID", 
                 "Final_State", "Speed_m_s", "Jerk_m2_s5", "Miss_Distance_m", 
                 "Energy_Joules", "Flight_Time_s", 
-                "Collisions", 
-                "Coverage_pct"
+                "Collisions", "Coverage_pct", "Solve_Time"
             ])
             
         for i in range(len(drone_ids)):
@@ -469,5 +469,6 @@ def save_metrics_to_csv(filepath, map_seed, overlap_factor, mode, drone_ids, met
                 round(metrics["energy"][i], 2),
                 round(metrics["time"][i], 2),
                 metrics["collisions"][i], 
-                round(global_cov, 2)
+                round(global_cov, 2), 
+                round(metrics["solve_time"][i], 6)
             ])
