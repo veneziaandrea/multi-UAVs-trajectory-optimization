@@ -21,8 +21,8 @@
         "timestep": 0.05,
         "k_wp_search": 3,
         "k_obs_search": 3, 
-        "max_iter": 2000, 
-        "noise_flag": 1, 
-        "noise_m": 0.3
+        "max_iter": 1500, 
+        "noise_flag": 0, 
+        "noise_m": 0.2
     }
 }

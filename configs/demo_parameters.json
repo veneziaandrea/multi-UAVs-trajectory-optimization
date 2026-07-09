@@ -1,5 +1,5 @@
 {
-    "seed": 69,
+    "seed": [11],
     "map": {
         "x_bounds": [0.0, 40.0],
         "y_bounds": [0.0, 40.0],
@@ -17,5 +17,6 @@
         "start_separation": 1.5,
         "camera_FOV": 84,
         "camera_aspect_ratio": 1.3333
-    }
+    },
+    "log_name": "two_seeds"
 }

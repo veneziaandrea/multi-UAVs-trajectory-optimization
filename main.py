@@ -131,18 +131,17 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     map_limits = [config["map"]["x_bounds"], config["map"]["y_bounds"], config["map"]["z_bounds"]]
-
+    log_name = config["log_name"]
     # TO BE CHANGED BEFORE RUNNING THE SCRIPT
     # logs file filename, if not existing the script will create one with such name
-    csv_filepath = ROOT / "logs" / "seed_69_noise30.csv"
+    csv_filepath = ROOT / "logs" / f"{log_name}.csv"
 
     # choose on how many maps do you want to simulate the optimization problem
     # seed_list = [3, 27, 51, 13, 93, 42, 84, 79, 32, 25, 33, 41, 69, 55, 99, 1, 7, 77, 11, 62, 76, 48, 82, 26, 64]
-    seed_list = [69]
+    seed_list = config["seed"]
     
     for test_seed in seed_list:
         # Set random seed for reproducibility
-        # seed_everything(config["seed"])
         config["seed"] = test_seed
         seed_everything(test_seed)
         # Build the demo environment and get initial drone positions
