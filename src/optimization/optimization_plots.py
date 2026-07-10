@@ -135,41 +135,45 @@ def plot_kinematics(drones, dt):
     colors = ['blue', 'green', 'magenta', 'cyan', 'orange']
 
     for i, drone in enumerate(drones):
-        path = np.array(drone.history_p)
-        col_color = colors[i % len(colors)]
-        
-        # Calculate and plot velocity 
-        ax_v = axes[0, i]
-        if len(path) > 1:
-            velocities = np.diff(path, axis=0) / dt
-            v_mag = np.linalg.norm(velocities, axis=1)
-            time_v = np.arange(len(v_mag)) * dt
-            avg_v = np.mean(v_mag)
+            path = np.array(drone.history_p)
+            col_color = colors[i % len(colors)]
             
-            ax_v.plot(time_v, v_mag, color=col_color, linewidth=2,
-                      label=f'Avg: {avg_v:.2f} m/s')
-            
-            ax_v.set_title(f"Drone {drone.id} Velocity", fontsize=12)
-            ax_v.set_ylabel("Vel [m/s]", fontsize=10)
-            ax_v.grid(True, ls="--", alpha=0.5)
-            ax_v.legend(loc="upper right", fontsize='small')
+            # Calculate and plot velocity 
+            ax_v = axes[0, i]
+            if len(path) > 1:
+                velocities = np.diff(path, axis=0) / dt
+                v_mag = np.linalg.norm(velocities, axis=1)
+                time_v = np.arange(len(v_mag)) * dt
+                
+                # Compute average only for non-zero velocities
+                avg_v = np.mean(v_mag[v_mag > 0]) if np.any(v_mag > 0) else 0.0
+                
+                ax_v.plot(time_v, v_mag, color=col_color, linewidth=2,
+                        label=f'Avg: {avg_v:.2f} m/s')
+                
+                ax_v.set_title(f"Drone {drone.id} Velocity", fontsize=12)
+                ax_v.set_ylabel("Vel [m/s]", fontsize=10)
+                ax_v.grid(True, ls="--", alpha=0.5)
+                ax_v.legend(loc="upper right", fontsize='small')
 
-        # Plot acceleration
-        ax_a = axes[1, i]
-        if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
-            true_accel = np.array(drone.history_a)
-            a_mag = np.linalg.norm(true_accel, axis=1)
-            time_a = np.arange(len(a_mag)) * dt
-            avg_a = np.mean(a_mag)
-            
-            ax_a.plot(time_a, a_mag, color=col_color, linewidth=2,
-                      label=f'Avg: {avg_a:.2f} m/s²')
-            
-            ax_a.set_title(f"Drone {drone.id} Acceleration", fontsize=12)
-            ax_a.set_ylabel("Acc [m/s²]", fontsize=10)
-            ax_a.set_xlabel("Time [s]", fontsize=10)
-            ax_a.grid(True, ls="--", alpha=0.5)
-            ax_a.legend(loc="upper right", fontsize='small')
+            # Plot acceleration
+            ax_a = axes[1, i]
+            if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
+                true_accel = np.array(drone.history_a)
+                a_mag = np.linalg.norm(true_accel, axis=1)
+                time_a = np.arange(len(a_mag)) * dt
+                
+                # Compute average only for non-zero accelerations
+                avg_a = np.mean(a_mag[a_mag > 0]) if np.any(a_mag > 0) else 0.0
+                
+                ax_a.plot(time_a, a_mag, color=col_color, linewidth=2,
+                        label=f'Avg: {avg_a:.2f} m/s²')
+                
+                ax_a.set_title(f"Drone {drone.id} Acceleration", fontsize=12)
+                ax_a.set_ylabel("Acc [m/s²]", fontsize=10)
+                ax_a.set_xlabel("Time [s]", fontsize=10)
+                ax_a.grid(True, ls="--", alpha=0.5)
+                ax_a.legend(loc="upper right", fontsize='small')
 
     plt.tight_layout()
     plt.show()
@@ -377,7 +381,7 @@ def plot_energy_consumption(drones, dt, mass=1.0):
 
 def evaluate_trajectory_performance(drone, dt):
     """
-    Analyzes the flight logs to quantify the Elastic Band effect and Coverage Trade-off.
+    Analyzes the flight logs to quantify the Elastic Band effect and Coverage Trade-off and other KPIs.
     """
     p_arr = np.array(drone.history_p)
     v_arr = np.array(drone.history_v)

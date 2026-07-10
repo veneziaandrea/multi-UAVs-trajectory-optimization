@@ -926,8 +926,11 @@ def run_swarm_simulation(drones, dt, max_iter, config, obstacles, obs_tree, dist
             mpc_cfg = config["mpc"]
             noise_flag = mpc_cfg["noise_flag"]
             noise_m = mpc_cfg["noise_m"]
+
+            state_noise = np.zeros(3)
             # Simulate GNSS/Sensor Fusion drift (~0.3m standard deviation)
-            state_noise = np.random.normal(loc=0.0, scale=noise_m, size=3) * noise_flag
+            state_noise[:2] = np.random.normal(loc=0.0, scale=noise_m/2, size=2) * noise_flag
+            state_noise[2] = np.random.normal(loc=0.0, scale=noise_m, size=1) * noise_flag
 
             noisy_p = drone.state["p"] + state_noise
             

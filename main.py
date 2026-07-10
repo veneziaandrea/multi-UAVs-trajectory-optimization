@@ -355,36 +355,36 @@ if __name__ == "__main__":
                 thrust_mag = mass * np.linalg.norm(a_3d, axis=1)
                 drone_energy = np.sum(thrust_mag**2) * dt
 
-            # KD-TREE DISCRETE COLLISION COUNTER
-            collision_events = 0
-            in_collision = False
-            
-            # Find the max radius so the KD-Tree knows how wide to cast its net
-            max_search_radius = np.max(obs_radii) 
-            
-            for p in drone.history_p:
-                step_collision = False
+                # KD-TREE DISCRETE COLLISION COUNTER
+                collision_events = 0
+                in_collision = False
                 
-                # Ask the KD-Tree for the indices of obstacles that are strictly nearby
-                # (p is [x,y,z] coordinate from the history)
-                nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
+                # Find the max radius so the KD-Tree knows how wide to cast its net
+                max_search_radius = np.max(obs_radii) 
                 
-                # Only loop through the 1 or 2 obstacles the tree found
-                for idx in nearby_obs_indices:
-                    obs = map3d.obstacles[idx]
+                for p in drone.history_p:
+                    step_collision = False
                     
-                    # Exact 2D distance check against the specific obstacle's actual radius
-                    dist = np.hypot(p[0] - obs.x, p[1] - obs.y)
-                    if dist <= (obs.radius + 0.25*safety_radius):
-                        step_collision = True
-                        break # Found a hit, no need to check other nearby obstacles
-                
-                # Discrete event tracking logic
-                if step_collision and not in_collision:
-                    collision_events += 1
-                    in_collision = True
-                elif not step_collision:
-                    in_collision = False
+                    # Ask the KD-Tree for the indices of obstacles that are strictly nearby
+                    # (p is [x,y,z] coordinate from the history)
+                    nearby_obs_indices = obs_tree.query_ball_point(p, r=max_search_radius)
+                    
+                    # Only loop through the 1 or 2 obstacles the tree found
+                    for idx in nearby_obs_indices:
+                        obs = map3d.obstacles[idx]
+                        
+                        # Exact 2D distance check against the specific obstacle's actual radius
+                        dist = np.hypot(p[0] - obs.x, p[1] - obs.y)
+                        if dist <= (obs.radius + 0.25*safety_radius):
+                            step_collision = True
+                            break # Found a hit, no need to check other nearby obstacles
+                    
+                    # Discrete event tracking logic
+                    if step_collision and not in_collision:
+                        collision_events += 1
+                        in_collision = True
+                    elif not step_collision:
+                        in_collision = False
 
             early_metrics["state"].append(status)
             early_metrics["time"].append(drone_time) 
@@ -420,8 +420,9 @@ if __name__ == "__main__":
    
     # Show the 3D map or animation for the Early Switching run
     plot_results(drones_early, map3d.obstacles)
-
-    # Plot the applied inputs and velocities
+    
+    # Plot the applied inputs and velocities, first for normal then for early switch run
+    plot_kinematics(drones_normal, dt)
     plot_kinematics(drones_early, dt)
 
     animate_simulation(drones_early, map3d.obstacles, map_limits)
