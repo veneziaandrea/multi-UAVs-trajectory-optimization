@@ -126,7 +126,7 @@ def plot_kinematics(drones, dt):
     """
     num_drones = len(drones)
     # Create a 2-row grid: Row 0 for Velocity, Row 1 for Acceleration
-    fig, axes = plt.subplots(2, num_drones, figsize=(4 * num_drones, 8), sharex=True)
+    fig, axes = plt.subplots(1, num_drones, figsize=(4 * num_drones, 8), sharex=True)
     
     # Ensure axes is a 2D array even if there is only one drone
     if num_drones == 1:
@@ -139,7 +139,7 @@ def plot_kinematics(drones, dt):
             col_color = colors[i % len(colors)]
             
             # Calculate and plot velocity 
-            ax_v = axes[0, i]
+            ax_v = axes[i]
             if len(path) > 1:
                 velocities = np.diff(path, axis=0) / dt
                 v_mag = np.linalg.norm(velocities, axis=1)
@@ -153,9 +153,11 @@ def plot_kinematics(drones, dt):
                 
                 ax_v.set_title(f"Drone {drone.id} Velocity", fontsize=12)
                 ax_v.set_ylabel("Vel [m/s]", fontsize=10)
+                ax_v.set_xlabel("Time [s]", fontsize=10)
                 ax_v.grid(True, ls="--", alpha=0.5)
                 ax_v.legend(loc="upper right", fontsize='small')
 
+            '''
             # Plot acceleration
             ax_a = axes[1, i]
             if hasattr(drone, 'history_a') and len(drone.history_a) > 0:
@@ -174,6 +176,7 @@ def plot_kinematics(drones, dt):
                 ax_a.set_xlabel("Time [s]", fontsize=10)
                 ax_a.grid(True, ls="--", alpha=0.5)
                 ax_a.legend(loc="upper right", fontsize='small')
+            '''
 
     plt.tight_layout()
     plt.show()

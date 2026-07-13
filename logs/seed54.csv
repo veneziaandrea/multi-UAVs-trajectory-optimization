@@ -1,0 +1,11 @@
+Map_Seed,Overlap_Factor,Algorithm,Drone_ID,Final_State,Speed_m_s,Jerk_m2_s5,Miss_Distance_m,Energy_Joules,Flight_Time_s,Collisions,Coverage_pct,Solve_Time
+54,0.3,Normal,Drone 0,Success,1.3998,1478.5153,0.2073,2812.67,27.75,0,99.57,0.021558
+54,0.3,Normal,Drone 1,Success,1.3815,2613.3951,0.2259,4353.93,42.65,0,99.57,0.021558
+54,0.3,Normal,Drone 2,Success,1.2007,2461.6757,0.2505,4256.43,41.8,0,99.57,0.021558
+54,0.3,Normal,Drone 3,Success,1.147,1916.6129,0.2444,3948.73,38.6,0,99.57,0.021558
+54,0.3,Normal,Drone 4,Success,1.3091,1915.0129,0.194,3313.67,32.3,0,99.57,0.021558
+54,0.3,Early,Drone 0,Success,1.9464,1422.1829,0.3832,3783.85,24.2,0,99.5,0.025528
+54,0.3,Early,Drone 1,Success,2.1238,2548.5844,0.3495,3886.85,37.9,0,99.5,0.025528
+54,0.3,Early,Drone 2,Success,1.8515,2476.566,0.4165,3870.28,36.05,0,99.5,0.025528
+54,0.3,Early,Drone 3,Success,1.7581,1897.9825,0.3979,3877.29,34.7,0,99.5,0.025528
+54,0.3,Early,Drone 4,Success,2.1266,1820.5546,0.2746,3836.89,29.4,0,99.5,0.025528
